@@ -5,6 +5,7 @@ import { startAgent, type AgentHandle } from "./agent/base.ts";
 import { makeOllamaHandlers } from "./agent/ollama.ts";
 import { makeClaudeHandlers } from "./agent/claude.ts";
 import { ContextStore } from "./store/context.ts";
+import { ThreadStore } from "./store/threads.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 
@@ -13,6 +14,7 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
   const kv = await Deno.openKv();
   const store = new ContextStore(kv);
+  const threads = new ThreadStore(kv);
 
   console.log(`[registry]   localhost:${registry.port}`);
 
@@ -37,6 +39,7 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
             systemPrompt: spec.preset.systemPrompt,
             apiKey: cfg.anthropicApiKey,
             store,
+            threads,
             registry: registryClient,
             bearerToken: cfg.bearerToken,
             selfName: spec.name,

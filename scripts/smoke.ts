@@ -7,6 +7,7 @@ import { startAgent } from "../src/agent/base.ts";
 import { makeOllamaHandlers } from "../src/agent/ollama.ts";
 import { makeClaudeHandlers } from "../src/agent/claude.ts";
 import { ContextStore } from "../src/store/context.ts";
+import { ThreadStore } from "../src/store/threads.ts";
 import { sendMessage } from "../src/protocol/client.ts";
 import { roles } from "../src/roles.config.ts";
 import type { AgentCard } from "../src/protocol/types.ts";
@@ -16,6 +17,7 @@ const registry = await startRegistry(cfg.registryPort);
 const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
 const kv = await Deno.openKv();
 const store = new ContextStore(kv);
+const threads = new ThreadStore(kv);
 
 console.log(`[registry] localhost:${registry.port}`);
 
@@ -49,6 +51,7 @@ const sonnetHandlers = makeClaudeHandlers({
   systemPrompt: roles.sonnet.systemPrompt,
   apiKey: cfg.anthropicApiKey,
   store,
+  threads,
   registry: registryClient,
   bearerToken: cfg.bearerToken,
   selfName: "sonnet",
@@ -61,6 +64,9 @@ const sonnet = await startAgent({
 });
 await registryClient.register(sonnet.card);
 console.log(`[sonnet]  ${sonnet.card.url}`);
+
+// Single REPL-like contextId so each probe shares sonnet's view of the world.
+const replContextId = crypto.randomUUID();
 
 async function probe(label: string, target: string, text: string) {
   console.log(`\n--- ${label} → ${target} ---`);
@@ -75,7 +81,7 @@ async function probe(label: string, target: string, text: string) {
         messageId: crypto.randomUUID(),
         role: "user",
         parts: [{ type: "text", text }],
-        contextId: crypto.randomUUID(),
+        contextId: replContextId,
       },
     });
     console.log(`< (${Date.now() - start}ms) ${res.text}`);
@@ -84,15 +90,25 @@ async function probe(label: string, target: string, text: string) {
   }
 }
 
-await probe("test 1 (direct Ollama)", "gemma3", "Reply with exactly: pong");
-
 await probe(
-  "test 2 (sonnet must delegate)",
+  "test 1 (sonnet starts a delegation thread)",
   "sonnet",
-  "Use the delegate_task tool to ask gemma3 'what is 2+2?'. Then report what gemma3 said in one sentence.",
+  "Use delegate_start to ask gemma3 to write a 5-7-5 haiku about frogs. Just report the haiku back to me with no commentary.",
 );
 
-console.log("\n--- test 3 (depth guard via raw fetch with x-depth: 2) ---");
+await probe(
+  "test 2 (sonnet should continue the SAME thread)",
+  "sonnet",
+  "Now ask gemma3 to make that haiku darker and more melancholic. Use delegate_continue so gemma3 remembers the original.",
+);
+
+await probe(
+  "test 3 (sonnet lists its threads)",
+  "sonnet",
+  "Call list_my_threads and tell me how many active threads you have, what peer they're with, and the turn count.",
+);
+
+console.log("\n--- test 4 (depth guard via raw fetch with x-depth: 2) ---");
 const rejectRes = await fetch(`${gemma.card.url}/message/send`, {
   method: "POST",
   headers: {
@@ -106,6 +122,12 @@ const rejectRes = await fetch(`${gemma.card.url}/message/send`, {
 });
 console.log(`< HTTP ${rejectRes.status} (expected 429)`);
 await rejectRes.body?.cancel();
+
+console.log("\n--- ThreadStore state ---");
+const finalThreads = await threads.list(replContextId);
+for (const t of finalThreads) {
+  console.log(`  ${t.peer}/${t.threadId.slice(0, 8)}  turns=${t.turnCount}  title="${t.title}"`);
+}
 
 await gemma.shutdown();
 await sonnet.shutdown();
