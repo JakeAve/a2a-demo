@@ -183,6 +183,33 @@ for (const t of finalThreads) {
   console.log(`  ${t.peer}/${t.threadId.slice(0, 8)}  turns=${t.turnCount}  title="${t.title}"`);
 }
 
+// Optional: exercise the claude-code backend if a credential is present.
+if (cfg.claudeCodeOauthToken || cfg.anthropicApiKey) {
+  const { makeClaudeCodeHandlers } = await import("../src/agent/claude-code.ts");
+  const { SessionStore } = await import("../src/store/sessions.ts");
+  const ccHandlers = makeClaudeCodeHandlers({
+    model: roles["opus-sub"].model,
+    systemPrompt: roles["opus-sub"].systemPrompt,
+    oauthToken: cfg.claudeCodeOauthToken,
+    apiKey: cfg.anthropicApiKey,
+    store, threads, sessions: new SessionStore(kv), registry: registryClient,
+    bearerToken: cfg.bearerToken, selfName: "opus-sub",
+  });
+  const ccAgent = await startAgent({
+    card: baseCard("opus-sub", roles["opus-sub"]),
+    bearerToken: cfg.bearerToken,
+    handler: ccHandlers.handler, streamHandler: ccHandlers.streamHandler,
+  });
+  await registryClient.register(ccAgent.card);
+  const res = await sendMessage({
+    url: ccAgent.card.url, token: cfg.bearerToken, depth: 0,
+    message: { messageId: crypto.randomUUID(), role: "user",
+      parts: [{ type: "text", text: "Reply with one word: PONG" }], contextId: crypto.randomUUID() },
+  });
+  console.log(`[opus-sub] -> ${res.text}`);
+  await ccAgent.shutdown();
+}
+
 // Kill spawned subprocesses
 for (const [name, child] of children) {
   try {
