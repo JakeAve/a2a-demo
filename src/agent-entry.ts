@@ -84,6 +84,16 @@ const handlers = preset.backend === "claude"
       systemPrompt: preset.systemPrompt,
       baseUrl: cfg.ollamaBaseUrl,
       store,
+      tools: preset.toolCapable
+        ? {
+            store,
+            threads,
+            registry,
+            bearerToken: cfg.bearerToken,
+            selfName: agentName,
+            // No spawnAgent — spawned agents can't spawn further agents.
+          }
+        : undefined,
     });
 
 const handle = await startAgent({

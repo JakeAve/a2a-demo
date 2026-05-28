@@ -125,6 +125,17 @@ export async function runOrchestrator(
             systemPrompt: spec.preset.systemPrompt,
             baseUrl: cfg.ollamaBaseUrl,
             store,
+            tools: spec.preset.toolCapable
+              ? {
+                  store,
+                  threads,
+                  registry: registryClient,
+                  bearerToken: cfg.bearerToken,
+                  selfName: spec.name,
+                  spawnAgent,
+                  availableRoles,
+                }
+              : undefined,
           });
 
       const handle = await startAgent({
