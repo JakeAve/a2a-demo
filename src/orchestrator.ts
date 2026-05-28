@@ -63,13 +63,14 @@ export async function runOrchestrator(
     if (agents.has(name) || children.has(name)) {
       return { ok: false, error: `agent "${name}" already running` };
     }
+    const perms = ["--allow-net", "--allow-env", "--allow-read", "--unstable-kv"];
+    if (preset.backend === "claude-code") {
+      perms.push("--allow-run", "--allow-write", "--allow-sys");
+    }
     const args = [
       "run",
       "--env-file=.env",
-      "--allow-net",
-      "--allow-env",
-      "--allow-read",
-      "--unstable-kv",
+      ...perms,
       "src/agent-entry.ts",
       `--role=${role}`,
       `--name=${name}`,
