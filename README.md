@@ -1,12 +1,140 @@
 # A2A Prototype
 
-Deno-based Agent-to-Agent (A2A) prototype: Claude delegates work to Ollama
-peers (and back) over HTTP, discovered via a local registry.
+Deno-based Agent-to-Agent (A2A) prototype: any Claude- or Ollama-backed
+agent can delegate work to peers over HTTP, discovered via a local
+registry. Each agent runs its own HTTP server, speaks the A2A wire
+protocol (JSON-RPC-ish over HTTP + SSE), and authenticates with a
+shared bearer token.
 
 ## Run
 
     cp .env.example .env
     # edit ANTHROPIC_API_KEY
-    deno task start --agents="sonnet,gemma3"
+    deno task start --agents="sonnet,gemma3,gemma4"
 
-See `docs/superpowers/specs/2026-05-28-a2a-design.md` for the design.
+In the REPL:
+
+    > @sonnet ask gemma3 to write a haiku about frogs, then make it darker
+    > @researcher decompose: what's the difference between TCP and UDP?
+    > @gemma4 use list_agents, then delegate a math question to a peer
+
+`@<name>` routes a prompt to that agent. Streaming token output and live
+`· tool_name{args}` events appear inline.
+
+## Agents
+
+Each agent is defined by a JSON file in `agents/`. The filename (minus
+`.json`) is the role name.
+
+| Role | Backend | Tools | Purpose |
+|---|---|---|---|
+| `sonnet` | Claude Sonnet | yes | Coordinator — delegates grunt work to peers |
+| `gemma3` | Ollama (`gemma3`) | no | Fast local generalist |
+| `gemma4` | Ollama (`gemma4:e4b`) | yes | Tool-capable local reasoner |
+| `code-reviewer` | Ollama (`gemma4:e4b`) | yes | Reviews code/diffs for bugs |
+| `summarizer` | Ollama (`gemma3:1b`) | no | Condenses long text |
+| `researcher` | Claude Sonnet | yes | Decomposes questions, delegates, synthesizes |
+| `translator` | Ollama (`gemma4:e4b`) | no | Human-lang and natural↔structured translation |
+
+**Add a new agent:** drop `agents/<name>.json` matching the shape in
+`agents/role.schema.json`. Restart. No code changes needed.
+
+**Override a model at the CLI:** `--agents="sonnet,gemma3:gemma3:1b"`
+runs the `gemma3` role with the `gemma3:1b` tag.
+
+## Architecture
+
+```
+deno task start --agents="sonnet,gemma3,gemma4"
+
+  [registry]   localhost:7890          (only fixed port)
+  [sonnet]     localhost:<dynamic>     (HTTP server, Agent Card at /.well-known/agent.json)
+  [gemma3]     localhost:<dynamic>
+  [gemma4]     localhost:<dynamic>
+  [REPL]       stdin/stdout            (@mentions, live SSE)
+```
+
+Each agent registers its Agent Card with the registry on boot. Peers
+discover each other via `GET /agents`. Delegations are bearer-token
+authenticated HTTP calls between agents.
+
+### Delegation threads
+
+A tool-capable agent has five tools for managing sub-conversations:
+
+- `list_agents()` — see peers
+- `list_my_threads()` — see active sub-conversations
+- `delegate_start(agent, prompt, title?)` — open a new thread, returns
+  `{ threadId, text }`
+- `delegate_continue(threadId, prompt)` — continue an existing thread
+  (peer sees prior turns)
+- `reset_thread(threadId)` — drop a finished thread
+
+Threads are scoped to the parent's contextId, persisted in Deno KV.
+Cross-conversation thread access is rejected.
+
+### Spawning agents at runtime
+
+An agent in the orchestrator can launch new peers on demand:
+
+- `list_roles()` — see available role presets
+- `spawn_agent(role, name?, model?)` — boot a new agent as its own
+  subprocess (Deno.Command + `src/agent-entry.ts`). Returns once the
+  new peer has registered.
+
+Spawned agents have their own KV (isolated history). The orchestrator
+kills them on shutdown. Standalone agents (no orchestrator) do not get
+spawn capability — that authority lives only with the orchestrator.
+
+### Depth guard
+
+Each `delegate_*` call increments an `x-depth` header. Depth ≥ 2 is
+rejected with HTTP 429. So `REPL → sonnet → gemma3` is fine; the next
+hop would be `429 Too Many Delegations`.
+
+### Standalone agents
+
+Spin up an agent in another terminal — it joins the same registry:
+
+    deno task start:agent --role=gemma4 --name=remote --registry=http://localhost:7890
+
+Useful for running peers on different machines (subject to network
+config — see `TODO.md`'s multi-machine entry).
+
+## Scripts
+
+- `scripts/smoke.ts` — full Tier C round-trip (Claude + Ollama,
+  delegate_start + delegate_continue + spawn_agent)
+- `scripts/smoke-gemma-tools.ts` — verify gemma4:e4b can call A2A tools
+  itself (no Claude in the loop)
+- `scripts/smoke-streaming-tools.ts` — verify streaming token output
+  through the tool loop
+- `scripts/kv-dump.ts` — dump every thread + conversation history in
+  the local Deno KV
+
+Run any of them with:
+
+    REGISTRY_PORT=0 deno run --env-file=.env --allow-net --allow-env --allow-read --allow-run --unstable-kv scripts/<file>.ts
+
+(The `REGISTRY_PORT=0` lets them use an OS-assigned port so they don't
+conflict with a running orchestrator on 7890.)
+
+## Configuration
+
+`.env` (see `.env.example`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REGISTRY_PORT` | `7890` | Registry's fixed port |
+| `ANTHROPIC_API_KEY` | — | Required for any Claude-backed agent |
+| `AGENT_BEARER_TOKEN` | `local-dev-secret` | Shared secret on all A2A calls |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Where to find Ollama |
+
+## Design + roadmap
+
+- `docs/superpowers/specs/2026-05-28-a2a-design.md` — full design spec
+  (architecture, protocol, security, threading, spawning, etc.)
+- `docs/superpowers/plans/2026-05-28-a2a-prototype.md` — implementation
+  plan (15 tasks, all done)
+- `TODO.md` — follow-ups: MCP wrapping, thread-browser CLI,
+  multi-machine, agent-card consolidation, others
