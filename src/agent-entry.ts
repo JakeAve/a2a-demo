@@ -9,10 +9,10 @@
 import { assertBackendCredentials, loadConfig } from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { startAgent } from "./agent/base.ts";
-import { makeOllamaHandlers } from "./agent/ollama.ts";
-import { makeClaudeHandlers } from "./agent/claude.ts";
 import { ContextStore } from "./store/context.ts";
 import { ThreadStore } from "./store/threads.ts";
+import { SessionStore } from "./store/sessions.ts";
+import { buildHandlers } from "./agent/handlers.ts";
 import { RegistryClient } from "./registry/client.ts";
 import type { AgentCard } from "./protocol/types.ts";
 
@@ -56,6 +56,7 @@ try {
 const kv = await Deno.openKv();
 const store = new ContextStore(kv);
 const threads = new ThreadStore(kv);
+const sessions = new SessionStore(kv);
 const registry = new RegistryClient(registryUrl);
 
 const baseCard: AgentCard = {
@@ -68,36 +69,17 @@ const baseCard: AgentCard = {
   security: [{ bearer: [] }],
 };
 
-const handlers = preset.backend === "claude"
-  ? makeClaudeHandlers({
-      model,
-      systemPrompt: preset.systemPrompt,
-      apiKey: cfg.anthropicApiKey,
-      store,
-      threads,
-      registry,
-      bearerToken: cfg.bearerToken,
-      selfName: agentName,
-      // Spawned agents cannot spawn further agents — that capability lives
-      // only with the orchestrator. Pass undefined and the Claude backend
-      // will omit the spawn tools from its TOOLS list.
-    })
-  : makeOllamaHandlers({
-      model,
-      systemPrompt: preset.systemPrompt,
-      baseUrl: cfg.ollamaBaseUrl,
-      store,
-      tools: preset.toolCapable
-        ? {
-            store,
-            threads,
-            registry,
-            bearerToken: cfg.bearerToken,
-            selfName: agentName,
-            // No spawnAgent — spawned agents can't spawn further agents.
-          }
-        : undefined,
-    });
+const handlers = buildHandlers({
+  model,
+  preset,
+  cfg,
+  store,
+  threads,
+  sessions,
+  registry,
+  selfName: agentName,
+  // Spawned agents cannot spawn further agents — no spawnAgent/availableRoles.
+});
 
 const handle = await startAgent({
   card: baseCard,

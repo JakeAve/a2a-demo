@@ -3,10 +3,11 @@ import type { RolePreset } from "./roles.ts";
 import { startRegistry, type RegistryHandle } from "./registry/server.ts";
 import { RegistryClient } from "./registry/client.ts";
 import { startAgent, type AgentHandle } from "./agent/base.ts";
-import { makeOllamaHandlers } from "./agent/ollama.ts";
-import { makeClaudeHandlers, type SpawnResult } from "./agent/claude.ts";
+import { type SpawnResult } from "./agent/claude.ts";
 import { ContextStore } from "./store/context.ts";
 import { ThreadStore } from "./store/threads.ts";
+import { SessionStore } from "./store/sessions.ts";
+import { buildHandlers } from "./agent/handlers.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 
@@ -34,6 +35,7 @@ export async function runOrchestrator(
   const kv = await Deno.openKv();
   const store = new ContextStore(kv);
   const threads = new ThreadStore(kv);
+  const sessions = new SessionStore(kv);
 
   console.log(`[registry]   localhost:${registry.port}`);
 
@@ -108,36 +110,18 @@ export async function runOrchestrator(
         security: [{ bearer: [] }],
       };
 
-      const handlers = spec.preset.backend === "claude"
-        ? makeClaudeHandlers({
-            model: spec.model,
-            systemPrompt: spec.preset.systemPrompt,
-            apiKey: cfg.anthropicApiKey,
-            store,
-            threads,
-            registry: registryClient,
-            bearerToken: cfg.bearerToken,
-            selfName: spec.name,
-            spawnAgent,
-            availableRoles,
-          })
-        : makeOllamaHandlers({
-            model: spec.model,
-            systemPrompt: spec.preset.systemPrompt,
-            baseUrl: cfg.ollamaBaseUrl,
-            store,
-            tools: spec.preset.toolCapable
-              ? {
-                  store,
-                  threads,
-                  registry: registryClient,
-                  bearerToken: cfg.bearerToken,
-                  selfName: spec.name,
-                  spawnAgent,
-                  availableRoles,
-                }
-              : undefined,
-          });
+      const handlers = buildHandlers({
+        model: spec.model,
+        preset: spec.preset,
+        cfg,
+        store,
+        threads,
+        sessions,
+        registry: registryClient,
+        selfName: spec.name,
+        spawnAgent,
+        availableRoles,
+      });
 
       const handle = await startAgent({
         card: baseCard,
