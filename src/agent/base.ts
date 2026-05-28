@@ -25,7 +25,8 @@ type Variables = { depth: number };
 export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
   const app = new Hono<{ Variables: Variables }>();
 
-  app.get("/.well-known/agent.json", (c) => c.json(cfg.card));
+  let servedCard = cfg.card;
+  app.get("/.well-known/agent.json", (c) => c.json(servedCard));
 
   app.use("/message/*", async (c, next) => {
     const auth = c.req.header("authorization") ?? "";
@@ -80,11 +81,11 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
 
   const server = Deno.serve({ port: 0, onListen: () => {} }, app.fetch);
   const port = (server.addr as Deno.NetAddr).port;
-  const card = { ...cfg.card, url: `http://localhost:${port}` };
+  servedCard = { ...cfg.card, url: `http://localhost:${port}` };
 
   return {
     port,
-    card,
+    card: servedCard,
     shutdown: async () => {
       await server.shutdown();
     },
