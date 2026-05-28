@@ -4,6 +4,7 @@ import type { RolePreset } from "./roles.ts";
 export type AppConfig = {
   registryPort: number;
   anthropicApiKey: string;
+  claudeCodeOauthToken: string;
   bearerToken: string;
   ollamaBaseUrl: string;
 };
@@ -20,9 +21,23 @@ export async function loadConfig(): Promise<AppConfig> {
   return {
     registryPort: Number(env.REGISTRY_PORT ?? 7890),
     anthropicApiKey: env.ANTHROPIC_API_KEY ?? "",
+    claudeCodeOauthToken: env.CLAUDE_CODE_OAUTH_TOKEN ?? "",
     bearerToken: env.AGENT_BEARER_TOKEN ?? "local-dev-secret",
     ollamaBaseUrl: env.OLLAMA_BASE_URL ?? "http://localhost:11434",
   };
+}
+
+// Throws with an actionable message if any spec's backend lacks its credential.
+export function assertBackendCredentials(specs: AgentSpec[], cfg: AppConfig): void {
+  const backends = new Set(specs.map((s) => s.preset.backend));
+  if (backends.has("claude") && !cfg.anthropicApiKey) {
+    throw new Error("ANTHROPIC_API_KEY is required for claude agents. Set it in .env");
+  }
+  if (backends.has("claude-code") && !cfg.claudeCodeOauthToken && !cfg.anthropicApiKey) {
+    throw new Error(
+      "claude-code agents require CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY. Set one in .env",
+    );
+  }
 }
 
 // Parse "sonnet,gemma3:gemma3:1b,code-reviewer" → AgentSpec[]

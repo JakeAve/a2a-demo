@@ -16,6 +16,11 @@ Deno.test("validateRolePreset accepts a complete role", () => {
   assertEquals(r.toolCapable, false);
 });
 
+Deno.test("validateRolePreset accepts claude-code backend", () => {
+  const r = validateRolePreset({ ...GOOD, backend: "claude-code" }, "test");
+  assertEquals(r.backend, "claude-code");
+});
+
 Deno.test("validateRolePreset rejects unknown backend", () => {
   assertThrows(
     () => validateRolePreset({ ...GOOD, backend: "vllm" }, "test"),
@@ -64,4 +69,11 @@ Deno.test("loadRoles surfaces errors with file path", async () => {
   await Deno.writeTextFile(`${dir}/bad.json`, '{"backend":"nope"}');
   await assertRejects(() => loadRoles(dir), Error, "bad.json");
   await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("loadRoles loads the opus-sub claude-code role", async () => {
+  const roles = await loadRoles();
+  assert(roles["opus-sub"], "opus-sub should be loaded");
+  assertEquals(roles["opus-sub"].backend, "claude-code");
+  assertEquals(roles["opus-sub"].toolCapable, true);
 });

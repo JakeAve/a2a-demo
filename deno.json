@@ -1,15 +1,17 @@
 {
   "tasks": {
-    "start": "deno run --env-file=.env --allow-net --allow-env --allow-read --allow-run --unstable-kv src/main.ts",
-    "start:agent": "deno run --env-file=.env --allow-net --allow-env --allow-read --unstable-kv src/agent-entry.ts",
-    "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --unstable-kv"
+    "start": "deno run -A --unstable-kv --env-file=.env src/main.ts",
+    "start:agent": "deno run -A --unstable-kv --env-file=.env src/agent-entry.ts",
+    "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv"
   },
   "imports": {
     "@std/dotenv": "jsr:@std/dotenv@^0.225.3",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/testing": "jsr:@std/testing@^1.0.0",
     "hono": "jsr:@hono/hono@^4.6.0",
-    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.30.0"
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.30.0",
+    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@^0.3.154",
+    "zod": "npm:zod@^4.4.3"
   },
   "compilerOptions": {
     "strict": true,

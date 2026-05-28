@@ -138,3 +138,25 @@ conflict with a running orchestrator on 7890.)
   plan (15 tasks, all done)
 - `TODO.md` — follow-ups: MCP wrapping, thread-browser CLI,
   multi-machine, agent-card consolidation, others
+
+## Claude backends & cost
+
+Two Claude backends exist, chosen per role via the `backend` field:
+
+- **`claude`** — direct Anthropic Messages API with `ANTHROPIC_API_KEY`. Best for
+  high-traffic, large-API-key usage.
+- **`claude-code`** — runs through the Claude Agent SDK. Prefers
+  `CLAUDE_CODE_OAUTH_TOKEN` (a subscription token from `claude setup-token`) and
+  falls back to `ANTHROPIC_API_KEY`. Lets a user without an API key run Claude
+  agents on their Pro/Max/Team/Enterprise subscription.
+
+**Cost note (effective June 15, 2026):** Agent SDK usage — including these
+`claude-code` agents — draws from a separate monthly Agent SDK credit
+(Pro $20 / Max 5x $100 / Max 20x $200 / Team & Enterprise per plan), not your
+interactive Claude limits. Once that credit is spent, usage either bills at
+standard API rates (if usage credits are enabled) or stops until the credit
+refreshes. **When driving this orchestrator from Claude Code under a
+subscription, prefer Ollama-backed peers for delegated work and reserve
+`claude-code` agents for tasks that genuinely need them** — every `claude-code`
+agent you spawn draws from that monthly credit. See
+`docs/superpowers/specs/2026-05-28-claude-code-backend-design.md` for details.

@@ -7,7 +7,7 @@
   "properties": {
     "$schema": { "type": "string" },
     "backend": {
-      "enum": ["claude", "ollama"],
+      "enum": ["claude", "ollama", "claude-code"],
       "description": "Which inference backend handles this role."
     },
     "model": {

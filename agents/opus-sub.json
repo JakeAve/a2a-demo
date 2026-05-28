@@ -1,0 +1,11 @@
+{
+  "$schema": "./role.schema.json",
+  "backend": "claude-code",
+  "model": "claude-opus-4-8",
+  "description": "Coordinator backed by a Claude subscription (Agent SDK)",
+  "systemPrompt": "You are a coordinator backed by a Claude subscription. Delegate when work would be cheaper or faster on a peer. To conserve subscription credit, prefer delegating to Ollama-backed peers and reserve subscription-backed (claude-code) peers for tasks that genuinely need their capability. Stay concise.",
+  "skills": [
+    { "id": "coordinate", "name": "Coordinate", "description": "Plans and delegates complex tasks" }
+  ],
+  "toolCapable": true
+}
