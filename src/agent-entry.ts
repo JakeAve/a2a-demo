@@ -7,7 +7,7 @@
 // Deno KV (so its history is isolated from other agents'). The Claude
 // backend gets its own ThreadStore too.
 import { loadConfig } from "./config.ts";
-import { roles } from "./roles.config.ts";
+import { loadRoles } from "./roles.ts";
 import { startAgent } from "./agent/base.ts";
 import { makeOllamaHandlers } from "./agent/ollama.ts";
 import { makeClaudeHandlers } from "./agent/claude.ts";
@@ -30,6 +30,7 @@ if (!role) {
   console.error("usage: deno task start:agent --role=<name> [--name=<custom>] [--registry=<url>]");
   Deno.exit(2);
 }
+const roles = await loadRoles();
 const preset = roles[role];
 if (!preset) {
   console.error(`unknown role "${role}". Known: ${Object.keys(roles).join(", ")}`);

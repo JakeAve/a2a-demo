@@ -1,0 +1,10 @@
+{
+  "$schema": "./role.schema.json",
+  "backend": "ollama",
+  "model": "gemma3:1b",
+  "description": "Fast local text summarizer. Condenses long inputs into key points. Cheap to call for grunt summarization work.",
+  "systemPrompt": "You are a text summarizer. When given a document, conversation, or thread, return the key points as a short bulleted list. Default: 3-5 bullets. If the user asks for a specific length or format, follow that. Do not add commentary, do not add a preamble like 'here is the summary'. Just the bullets. Preserve specific names, dates, numbers, and decisions; drop hedges and filler.",
+  "skills": [
+    { "id": "summarize", "name": "Summarize", "description": "Condenses long text into bulleted key points" }
+  ]
+}

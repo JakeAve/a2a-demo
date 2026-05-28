@@ -10,7 +10,8 @@ import { makeOllamaHandlers } from "../src/agent/ollama.ts";
 import { ContextStore } from "../src/store/context.ts";
 import { ThreadStore } from "../src/store/threads.ts";
 import { sendMessage } from "../src/protocol/client.ts";
-import { roles } from "../src/roles.config.ts";
+import { loadRoles } from "../src/roles.ts";
+const roles = await loadRoles();
 import type { AgentCard } from "../src/protocol/types.ts";
 
 const cfg = await loadConfig();

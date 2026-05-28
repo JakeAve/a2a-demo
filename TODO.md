@@ -56,6 +56,19 @@ remote boxes. Currently every URL is `http://localhost:<port>`.
 **Rough scope:** 100+ lines plus infra setup (certs, hostnames). The
 A2A protocol itself doesn't change; only deployment shape does.
 
+## Consolidate Agent Card creation
+
+`AgentCard` is built in two places today (`src/orchestrator.ts` ~L99
+and `src/agent-entry.ts` ~L58), with identical shape and duplicated
+`securitySchemes` / `security` boilerplate. Both also work in lockstep
+with `startAgent()` in `src/agent/base.ts`, which rewrites the URL
+after binding.
+
+Refactor target: a single `buildAgentCard(name, preset)` helper (in
+`src/agent/base.ts` or `src/roles.ts`) that produces the card from a
+role name + RolePreset. Both call sites become one-liners. Reduces the
+risk of the two diverging.
+
 ## Other ideas captured during development
 
 - **Reset / forget tool for sonnet**: `forget(threadId)` or just deeper

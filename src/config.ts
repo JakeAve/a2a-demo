@@ -1,5 +1,5 @@
 import { load } from "@std/dotenv";
-import { roles, type RolePreset } from "./roles.config.ts";
+import type { RolePreset } from "./roles.ts";
 
 export type AppConfig = {
   registryPort: number;
@@ -27,7 +27,10 @@ export async function loadConfig(): Promise<AppConfig> {
 
 // Parse "sonnet,gemma3:gemma3:1b,code-reviewer" → AgentSpec[]
 // Splits on the FIRST colon only so model tags like "gemma3:1b" survive.
-export function parseAgentsFlag(raw: string): AgentSpec[] {
+export function parseAgentsFlag(
+  raw: string,
+  roles: Record<string, RolePreset>,
+): AgentSpec[] {
   return raw.split(",").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
     const colon = entry.indexOf(":");
     const name = colon === -1 ? entry : entry.slice(0, colon);

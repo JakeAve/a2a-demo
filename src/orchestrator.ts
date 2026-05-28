@@ -1,5 +1,5 @@
 import { type AgentSpec, type AppConfig } from "./config.ts";
-import { roles } from "./roles.config.ts";
+import type { RolePreset } from "./roles.ts";
 import { startRegistry, type RegistryHandle } from "./registry/server.ts";
 import { RegistryClient } from "./registry/client.ts";
 import { startAgent, type AgentHandle } from "./agent/base.ts";
@@ -27,6 +27,7 @@ async function waitForRegistration(
 export async function runOrchestrator(
   cfg: AppConfig,
   specs: AgentSpec[],
+  roles: Record<string, RolePreset>,
 ): Promise<void> {
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);

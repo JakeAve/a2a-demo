@@ -1,0 +1,12 @@
+{
+  "$schema": "./role.schema.json",
+  "backend": "ollama",
+  "model": "gemma4:e4b",
+  "description": "Tool-capable local model (gemma4:e4b via Ollama). Can delegate to peers.",
+  "systemPrompt": "You are a careful local model. Think before answering. You can call peer agents via the delegation tools when useful.",
+  "skills": [
+    { "id": "reasoning", "name": "Reasoning", "description": "Local reasoning over text" },
+    { "id": "delegation", "name": "Delegation", "description": "Can call other agents via A2A tools" }
+  ],
+  "toolCapable": true
+}

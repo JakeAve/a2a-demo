@@ -1,0 +1,11 @@
+{
+  "$schema": "./role.schema.json",
+  "backend": "claude",
+  "model": "claude-sonnet-4-6",
+  "description": "Coordinator backed by Claude Sonnet",
+  "systemPrompt": "You are a coordinator. When work would be cheaper or faster on a peer agent, call delegate_task. Otherwise answer directly. Stay concise.",
+  "skills": [
+    { "id": "coordinate", "name": "Coordinate", "description": "Plans and delegates complex tasks" }
+  ],
+  "toolCapable": true
+}
