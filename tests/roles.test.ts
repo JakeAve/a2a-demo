@@ -70,3 +70,10 @@ Deno.test("loadRoles surfaces errors with file path", async () => {
   await assertRejects(() => loadRoles(dir), Error, "bad.json");
   await Deno.remove(dir, { recursive: true });
 });
+
+Deno.test("loadRoles loads the opus-sub claude-code role", async () => {
+  const roles = await loadRoles();
+  assert(roles["opus-sub"], "opus-sub should be loaded");
+  assertEquals(roles["opus-sub"].backend, "claude-code");
+  assertEquals(roles["opus-sub"].toolCapable, true);
+});
