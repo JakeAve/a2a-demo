@@ -30,19 +30,19 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
 });
 
 const gemmaHandlers = makeOllamaHandlers({
-  model: "gemma4",
-  systemPrompt: roles.gemma4.systemPrompt,
+  model: "gemma3:1b",
+  systemPrompt: roles.gemma3.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
 const gemma = await startAgent({
-  card: baseCard("gemma4", roles.gemma4),
+  card: baseCard("gemma3", roles.gemma3),
   bearerToken: cfg.bearerToken,
   handler: gemmaHandlers.handler,
   streamHandler: gemmaHandlers.streamHandler,
 });
 await registryClient.register(gemma.card);
-console.log(`[gemma4]  ${gemma.card.url}`);
+console.log(`[gemma3]  ${gemma.card.url}`);
 
 const sonnetHandlers = makeClaudeHandlers({
   model: roles.sonnet.model,
@@ -84,12 +84,12 @@ async function probe(label: string, target: string, text: string) {
   }
 }
 
-await probe("test 1 (direct Ollama)", "gemma4", "Reply with exactly: pong");
+await probe("test 1 (direct Ollama)", "gemma3", "Reply with exactly: pong");
 
 await probe(
   "test 2 (sonnet must delegate)",
   "sonnet",
-  "Use the delegate_task tool to ask gemma4 'what is 2+2?'. Then report what gemma4 said in one sentence.",
+  "Use the delegate_task tool to ask gemma3 'what is 2+2?'. Then report what gemma3 said in one sentence.",
 );
 
 console.log("\n--- test 3 (depth guard via raw fetch with x-depth: 2) ---");

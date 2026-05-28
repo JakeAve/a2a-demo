@@ -25,10 +25,13 @@ export async function loadConfig(): Promise<AppConfig> {
   };
 }
 
-// Parse "sonnet,gemma3:llama3.1,code-reviewer" → AgentSpec[]
+// Parse "sonnet,gemma3:gemma3:1b,code-reviewer" → AgentSpec[]
+// Splits on the FIRST colon only so model tags like "gemma3:1b" survive.
 export function parseAgentsFlag(raw: string): AgentSpec[] {
   return raw.split(",").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
-    const [name, modelOverride] = entry.split(":");
+    const colon = entry.indexOf(":");
+    const name = colon === -1 ? entry : entry.slice(0, colon);
+    const modelOverride = colon === -1 ? undefined : entry.slice(colon + 1);
     const preset = roles[name];
     if (!preset) throw new Error(`Unknown role: ${name}. Known: ${Object.keys(roles).join(", ")}`);
     return { name, preset, model: modelOverride ?? preset.model };
