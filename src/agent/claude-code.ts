@@ -71,6 +71,35 @@ function assistantText(msg: { message: { content: Array<{ type: string; text?: s
     .join("");
 }
 
+type Accumulator = { finalText: string; sessionId?: string };
+
+// Process one SDK message: update the accumulator and report an optional
+// text delta to stream and/or a terminal error message.
+function step(msg: SdkMessage, acc: Accumulator): { delta?: string; error?: string } {
+  if (msg.type === "assistant") {
+    const am = msg as Extract<SdkMessage, { type: "assistant" }>;
+    acc.sessionId ??= am.session_id;
+    const text = assistantText(am);
+    if (text) {
+      acc.finalText = text;
+      return { delta: text };
+    }
+    return {};
+  }
+  if (msg.type === "result") {
+    const r = msg as Extract<SdkMessage, { type: "result" }>;
+    acc.sessionId ??= r.session_id;
+    if (r.subtype === "success") {
+      // Prefer the SDK's final result string; otherwise keep the last
+      // assistant text block we accumulated.
+      if (typeof r.result === "string") acc.finalText = r.result;
+      return {};
+    }
+    return { error: `claude-code query failed (${r.subtype}): ${(r.errors ?? []).join("; ")}` };
+  }
+  return {};
+}
+
 export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
   const toolDeps: ToolDeps = {
     store: deps.store,
@@ -81,6 +110,7 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
     spawnAgent: deps.spawnAgent,
     availableRoles: deps.availableRoles,
   };
+  const allowedTools = a2aToolNames(toolDeps);
   const runQuery = deps.runQuery ?? (sdkQuery as unknown as QueryFn);
 
   async function prepare(ctx: AgentHandlerCtx) {
@@ -97,57 +127,43 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
       permissionMode: "bypassPermissions",
       env,
       mcpServers: { a2a: server },
-      allowedTools: a2aToolNames(toolDeps),
+      allowedTools,
     };
     if (resume) options.resume = resume;
     return { contextId, prompt, options };
   }
 
+  // Persist the SDK session id and mirror the assistant turn to the audit store.
+  // Only called on a successful run (a failed query records nothing).
+  async function finishSession(contextId: string, acc: Accumulator): Promise<void> {
+    if (acc.sessionId) await deps.sessions.set(contextId, acc.sessionId);
+    await deps.store.append(contextId, { role: "assistant", content: acc.finalText });
+  }
+
   async function handler(ctx: AgentHandlerCtx): Promise<{ text: string }> {
     const { contextId, prompt, options } = await prepare(ctx);
-    let finalText = "";
-    let sessionId: string | undefined;
+    const acc: Accumulator = { finalText: "" };
     for await (const msg of runQuery({ prompt, options })) {
-      if (msg.type === "assistant") {
-        sessionId ??= msg.session_id;
-        const text = assistantText(msg as never);
-        if (text) finalText = text;
-      } else if (msg.type === "result") {
-        sessionId ??= msg.session_id;
-        const r = msg as { subtype: string; result?: string; errors?: string[] };
-        if (r.subtype === "success") {
-          if (typeof r.result === "string") finalText = r.result;
-        } else {
-          throw new Error(`claude-code query failed (${r.subtype}): ${(r.errors ?? []).join("; ")}`);
-        }
-      }
+      const { error } = step(msg, acc);
+      if (error) throw new Error(error);
     }
-    if (sessionId) await deps.sessions.set(contextId, sessionId);
-    await deps.store.append(contextId, { role: "assistant", content: finalText });
-    return { text: finalText };
+    await finishSession(contextId, acc);
+    return { text: acc.finalText };
   }
 
   async function* streamHandler(ctx: AgentHandlerCtx): AsyncGenerator<StreamEvent> {
     const { contextId, prompt, options } = await prepare(ctx);
-    let finalText = "";
-    let sessionId: string | undefined;
+    const acc: Accumulator = { finalText: "" };
     for await (const msg of runQuery({ prompt, options })) {
-      if (msg.type === "assistant") {
-        sessionId ??= msg.session_id;
-        const text = assistantText(msg as never);
-        if (text) { finalText = text; yield { type: "delta", text }; }
-      } else if (msg.type === "result") {
-        sessionId ??= msg.session_id;
-        const r = msg as { subtype: string; result?: string; errors?: string[] };
-        if (r.subtype === "success") {
-          if (typeof r.result === "string") finalText = r.result;
-        } else {
-          yield { type: "error", message: `claude-code query failed (${r.subtype}): ${(r.errors ?? []).join("; ")}` };
-        }
+      const { delta, error } = step(msg, acc);
+      if (delta) yield { type: "delta", text: delta };
+      if (error) {
+        // Surface the error and stop; record nothing (mirrors handler's throw).
+        yield { type: "error", message: error };
+        return;
       }
     }
-    if (sessionId) await deps.sessions.set(contextId, sessionId);
-    await deps.store.append(contextId, { role: "assistant", content: finalText });
+    await finishSession(contextId, acc);
     yield { type: "done" };
   }
 

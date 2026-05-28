@@ -1,9 +1,8 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { resolveClaudeCodeEnv } from "../../src/agent/claude-code.ts";
+import { makeClaudeCodeHandlers, resolveClaudeCodeEnv, type QueryFn } from "../../src/agent/claude-code.ts";
 import { ContextStore } from "../../src/store/context.ts";
 import { ThreadStore } from "../../src/store/threads.ts";
 import { SessionStore } from "../../src/store/sessions.ts";
-import { makeClaudeCodeHandlers, type QueryFn } from "../../src/agent/claude-code.ts";
 import type { RegistryClient } from "../../src/registry/client.ts";
 import type { AgentHandlerCtx } from "../../src/agent/base.ts";
 
