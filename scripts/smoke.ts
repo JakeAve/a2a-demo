@@ -1,0 +1,114 @@
+// Manual smoke test: boots the same components the orchestrator would,
+// runs a few real round-trips against Anthropic + Ollama, then exits.
+import { loadConfig } from "../src/config.ts";
+import { startRegistry } from "../src/registry/server.ts";
+import { RegistryClient } from "../src/registry/client.ts";
+import { startAgent } from "../src/agent/base.ts";
+import { makeOllamaHandlers } from "../src/agent/ollama.ts";
+import { makeClaudeHandlers } from "../src/agent/claude.ts";
+import { ContextStore } from "../src/store/context.ts";
+import { sendMessage } from "../src/protocol/client.ts";
+import { roles } from "../src/roles.config.ts";
+import type { AgentCard } from "../src/protocol/types.ts";
+
+const cfg = await loadConfig();
+const registry = await startRegistry(cfg.registryPort);
+const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
+const kv = await Deno.openKv();
+const store = new ContextStore(kv);
+
+console.log(`[registry] localhost:${registry.port}`);
+
+const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
+  name,
+  description: preset.description,
+  version: "1.0.0",
+  url: "http://localhost:0",
+  skills: preset.skills,
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+  security: [{ bearer: [] }],
+});
+
+const gemmaHandlers = makeOllamaHandlers({
+  model: "gemma4",
+  systemPrompt: roles.gemma4.systemPrompt,
+  baseUrl: cfg.ollamaBaseUrl,
+  store,
+});
+const gemma = await startAgent({
+  card: baseCard("gemma4", roles.gemma4),
+  bearerToken: cfg.bearerToken,
+  handler: gemmaHandlers.handler,
+  streamHandler: gemmaHandlers.streamHandler,
+});
+await registryClient.register(gemma.card);
+console.log(`[gemma4]  ${gemma.card.url}`);
+
+const sonnetHandlers = makeClaudeHandlers({
+  model: roles.sonnet.model,
+  systemPrompt: roles.sonnet.systemPrompt,
+  apiKey: cfg.anthropicApiKey,
+  store,
+  registry: registryClient,
+  bearerToken: cfg.bearerToken,
+  selfName: "sonnet",
+});
+const sonnet = await startAgent({
+  card: baseCard("sonnet", roles.sonnet),
+  bearerToken: cfg.bearerToken,
+  handler: sonnetHandlers.handler,
+  streamHandler: sonnetHandlers.streamHandler,
+});
+await registryClient.register(sonnet.card);
+console.log(`[sonnet]  ${sonnet.card.url}`);
+
+async function probe(label: string, target: string, text: string) {
+  console.log(`\n--- ${label} → ${target} ---`);
+  console.log(`> ${text}`);
+  const start = Date.now();
+  try {
+    const res = await sendMessage({
+      url: target === "sonnet" ? sonnet.card.url : gemma.card.url,
+      token: cfg.bearerToken,
+      depth: 0,
+      message: {
+        messageId: crypto.randomUUID(),
+        role: "user",
+        parts: [{ type: "text", text }],
+        contextId: crypto.randomUUID(),
+      },
+    });
+    console.log(`< (${Date.now() - start}ms) ${res.text}`);
+  } catch (e) {
+    console.log(`< ERROR: ${(e as Error).message}`);
+  }
+}
+
+await probe("test 1 (direct Ollama)", "gemma4", "Reply with exactly: pong");
+
+await probe(
+  "test 2 (sonnet must delegate)",
+  "sonnet",
+  "Use the delegate_task tool to ask gemma4 'what is 2+2?'. Then report what gemma4 said in one sentence.",
+);
+
+console.log("\n--- test 3 (depth guard via raw fetch with x-depth: 2) ---");
+const rejectRes = await fetch(`${gemma.card.url}/message/send`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    authorization: `Bearer ${cfg.bearerToken}`,
+    "x-depth": "2",
+  },
+  body: JSON.stringify({
+    message: { messageId: "x", role: "user", parts: [{ type: "text", text: "hi" }] },
+  }),
+});
+console.log(`< HTTP ${rejectRes.status} (expected 429)`);
+await rejectRes.body?.cancel();
+
+await gemma.shutdown();
+await sonnet.shutdown();
+await registry.shutdown();
+kv.close();
+console.log("\nshutdown complete.");

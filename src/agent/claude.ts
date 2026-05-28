@@ -80,6 +80,10 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
       const prompt = String(args.prompt);
       const card = await deps.registry.get(target);
       if (!card) return `error: unknown agent ${target}`;
+      // Each delegation runs in its own sub-context so the peer doesn't see
+      // this agent's conversation history. The parent's contextId is recorded
+      // so future versions could attach metadata or link threads.
+      void contextId;
       try {
         const res = await sendMessage({
           url: card.url,
@@ -89,7 +93,7 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
             messageId: crypto.randomUUID(),
             role: "agent",
             parts: [{ type: "text", text: prompt }],
-            contextId,
+            contextId: crypto.randomUUID(),
           },
         });
         return res.text;
