@@ -6,7 +6,7 @@
 // the registry, and runs until SIGINT/SIGTERM. Each process owns its own
 // Deno KV (so its history is isolated from other agents'). The Claude
 // backend gets its own ThreadStore too.
-import { loadConfig } from "./config.ts";
+import { assertBackendCredentials, loadConfig } from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { startAgent } from "./agent/base.ts";
 import { makeOllamaHandlers } from "./agent/ollama.ts";
@@ -46,8 +46,10 @@ const registryUrl = getFlag(Deno.args, "registry") ??
   Deno.env.get("REGISTRY_URL") ??
   `http://localhost:${cfg.registryPort}`;
 
-if (preset.backend === "claude" && !cfg.anthropicApiKey) {
-  console.error("ANTHROPIC_API_KEY is required for Claude agents.");
+try {
+  assertBackendCredentials([{ name: agentName, preset, model }], cfg);
+} catch (e) {
+  console.error((e as Error).message);
   Deno.exit(1);
 }
 

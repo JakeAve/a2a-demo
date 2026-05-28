@@ -1,5 +1,31 @@
-import { assertEquals } from "@std/assert";
-import { loadConfig } from "../src/config.ts";
+import { assertEquals, assertThrows } from "@std/assert";
+import { assertBackendCredentials, loadConfig } from "../src/config.ts";
+import type { AppConfig, AgentSpec } from "../src/config.ts";
+
+const baseCfg: AppConfig = {
+  registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "",
+  bearerToken: "t", ollamaBaseUrl: "x",
+};
+const spec = (backend: string): AgentSpec => ({
+  name: "a", model: "m",
+  preset: { backend, model: "m", description: "", systemPrompt: "", skills: [] } as never,
+});
+
+Deno.test("assertBackendCredentials requires API key for claude backend", () => {
+  assertThrows(() => assertBackendCredentials([spec("claude")], baseCfg), Error, "ANTHROPIC_API_KEY");
+});
+
+Deno.test("assertBackendCredentials accepts claude-code with only OAuth token", () => {
+  assertBackendCredentials([spec("claude-code")], { ...baseCfg, claudeCodeOauthToken: "sk-oat" });
+});
+
+Deno.test("assertBackendCredentials accepts claude-code with only API key", () => {
+  assertBackendCredentials([spec("claude-code")], { ...baseCfg, anthropicApiKey: "sk-api" });
+});
+
+Deno.test("assertBackendCredentials rejects claude-code with neither credential", () => {
+  assertThrows(() => assertBackendCredentials([spec("claude-code")], baseCfg), Error, "claude-code");
+});
 
 Deno.test("loadConfig surfaces CLAUDE_CODE_OAUTH_TOKEN", async () => {
   Deno.env.set("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat-test");

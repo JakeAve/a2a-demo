@@ -1,4 +1,4 @@
-import { loadConfig, parseAgentsFlag } from "./config.ts";
+import { assertBackendCredentials, loadConfig, parseAgentsFlag } from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { runOrchestrator } from "./orchestrator.ts";
 
@@ -15,8 +15,10 @@ const cfg = await loadConfig();
 const roles = await loadRoles();
 const specs = parseAgentsFlag(getAgentsFlag(Deno.args), roles);
 
-if (specs.some((s) => s.preset.backend === "claude") && !cfg.anthropicApiKey) {
-  console.error("ANTHROPIC_API_KEY is required for Claude agents. Set it in .env");
+try {
+  assertBackendCredentials(specs, cfg);
+} catch (e) {
+  console.error((e as Error).message);
   Deno.exit(1);
 }
 
