@@ -6,7 +6,7 @@
 
 import type { Skill } from "./protocol/types.ts";
 
-export type Backend = "claude" | "ollama";
+export type Backend = "claude" | "ollama" | "claude-code";
 
 export type RolePreset = {
   backend: Backend;
@@ -33,8 +33,8 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
     throw new Error(`${source}: not an object`);
   }
   const o = v as Record<string, unknown>;
-  if (o.backend !== "claude" && o.backend !== "ollama") {
-    throw new Error(`${source}: backend must be "claude" or "ollama" (got ${JSON.stringify(o.backend)})`);
+  if (o.backend !== "claude" && o.backend !== "ollama" && o.backend !== "claude-code") {
+    throw new Error(`${source}: backend must be "claude", "ollama", or "claude-code" (got ${JSON.stringify(o.backend)})`);
   }
   if (typeof o.model !== "string" || !o.model) {
     throw new Error(`${source}: model must be a non-empty string`);

@@ -16,6 +16,11 @@ Deno.test("validateRolePreset accepts a complete role", () => {
   assertEquals(r.toolCapable, false);
 });
 
+Deno.test("validateRolePreset accepts claude-code backend", () => {
+  const r = validateRolePreset({ ...GOOD, backend: "claude-code" }, "test");
+  assertEquals(r.backend, "claude-code");
+});
+
 Deno.test("validateRolePreset rejects unknown backend", () => {
   assertThrows(
     () => validateRolePreset({ ...GOOD, backend: "vllm" }, "test"),
