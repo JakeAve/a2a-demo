@@ -59,6 +59,49 @@ identity intact. No token-spoofing.
 | MCP server | Design-compatible, defer build | Keep this spec focused |
 | Orchestrator lifetime | Child of Claude Code session | Matches usage model; cred inherits for free |
 
+## Billing & usage (changes effective June 15, 2026)
+
+Authenticating through the Agent SDK with a subscription token is a metered,
+evolving billing surface that operators must understand before pointing a fleet of
+agents at it. Per Anthropic's docs:
+
+- **Before June 15, 2026:** Agent SDK / `claude -p` usage on a subscription draws
+  from the plan's normal interactive usage limits.
+- **From June 15, 2026:** Agent SDK usage (and non-interactive `claude -p`) —
+  **explicitly including third-party apps authenticating through the Agent SDK,
+  which is exactly what this `claude-code` backend is** — no longer counts toward
+  interactive subscription limits. It instead draws from a **separate monthly Agent
+  SDK credit**, per user, not shareable:
+
+  | Plan | Monthly Agent SDK credit |
+  |---|---|
+  | Pro | $20 |
+  | Max 5x | $100 |
+  | Max 20x | $200 |
+  | Team (Standard) | $20 |
+  | Team (Premium) | $100 |
+  | Enterprise (Premium seats) | $200 |
+
+- **When the monthly credit is exhausted:** additional usage flows to usage credits
+  at **standard API rates** — *only if the user has enabled usage credits*. If usage
+  credits are **not** enabled, Agent SDK requests **stop** until the credit
+  refreshes.
+- **Interactive** Claude Code in the terminal/IDE is unaffected and keeps using
+  subscription limits.
+
+**Implications for this project.** A single subscription user fanning out across a
+fleet of `claude-code` A2A agents can consume the monthly Agent SDK credit quickly,
+after which they either pay standard API rates (if usage credits are enabled) or get
+cut off until refresh. This is a concrete reason the **API-key fallback** (§2)
+matters, and a reason the deferred **rate/cost caps** (`TODO.md`) become relevant for
+this backend. No code depends on these dollar figures — this section is operational
+context, and the numbers may change; treat the linked docs as the source of truth.
+
+Sources:
+[Use the Claude Agent SDK with your Claude plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)
+·
+[Claude Code authentication](https://code.claude.com/docs/en/authentication)
+
 ## Architecture
 
 ```
@@ -132,6 +175,14 @@ if (oauthToken) {
   throw new Error("claude-code backend requires CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY");
 }
 ```
+
+> **Why pass only one credential (not cosmetic).** Claude Code's own credential
+> precedence ranks `ANTHROPIC_API_KEY` (#3) **above** `CLAUDE_CODE_OAUTH_TOKEN`
+> (#5) — if both are present in the environment, the CLI uses the API key, the
+> *opposite* of what we want. Passing a single resolved credential in `env` and
+> deleting the other is therefore required to actually prefer the subscription
+> token. See the precedence list in the
+> [Claude Code authentication docs](https://code.claude.com/docs/en/authentication).
 
 **Startup validation** (mirrors the existing `ANTHROPIC_API_KEY` guard at
 `src/main.ts:18` and `src/agent-entry.ts:49`):
@@ -271,6 +322,12 @@ a child of the Claude Code session, the future MCP stdio server simply exposes
    plus explicit `allowedTools`.
 4. **Two stores of record drift** (SDK session vs ContextStore). Mitigated by the
    clear role split; ContextStore is audit-only for this backend.
+5. **Credit exhaustion is a hard stop** (post June 15, 2026). When the monthly
+   Agent SDK credit is spent and usage credits are not enabled, `query()` requests
+   fail rather than silently degrading (see Billing & usage). The handler must
+   surface a clear, actionable error to the A2A caller (distinguishing "out of
+   credit" from a generic failure where the SDK error allows) rather than hanging or
+   returning empty text. Long-term mitigation is the deferred rate/cost-caps TODO.
 
 ## Testing
 
