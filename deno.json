@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "start": "deno run --env-file=.env --allow-net --allow-env --allow-read --unstable-kv src/main.ts",
+    "start": "deno run --env-file=.env --allow-net --allow-env --allow-read --allow-run --unstable-kv src/main.ts",
+    "start:agent": "deno run --env-file=.env --allow-net --allow-env --allow-read --unstable-kv src/agent-entry.ts",
     "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --unstable-kv"
   },
   "imports": {

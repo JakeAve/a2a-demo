@@ -11,6 +11,7 @@ import { ThreadStore } from "../src/store/threads.ts";
 import { sendMessage } from "../src/protocol/client.ts";
 import { roles } from "../src/roles.config.ts";
 import type { AgentCard } from "../src/protocol/types.ts";
+import type { SpawnResult } from "../src/agent/claude.ts";
 
 const cfg = await loadConfig();
 const registry = await startRegistry(cfg.registryPort);
@@ -46,6 +47,49 @@ const gemma = await startAgent({
 await registryClient.register(gemma.card);
 console.log(`[gemma3]  ${gemma.card.url}`);
 
+const children = new Map<string, Deno.ChildProcess>();
+async function waitForRegistration(name: string, timeoutMs = 15_000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await registryClient.get(name)) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+const spawnAgent = async (role: string, customName?: string, modelOverride?: string): Promise<SpawnResult> => {
+  const preset = roles[role];
+  if (!preset) return { ok: false, error: `unknown role ${role}` };
+  const name = customName ?? role;
+  if (children.has(name)) return { ok: false, error: `agent ${name} already running` };
+  const args = [
+    "run",
+    "--env-file=.env",
+    "--allow-net",
+    "--allow-env",
+    "--allow-read",
+    "--unstable-kv",
+    "src/agent-entry.ts",
+    `--role=${role}`,
+    `--name=${name}`,
+    `--registry=http://localhost:${registry.port}`,
+  ];
+  if (modelOverride) args.push(`--model=${modelOverride}`);
+  const child = new Deno.Command(Deno.execPath(), {
+    args,
+    stdout: "inherit",
+    stderr: "inherit",
+  }).spawn();
+  children.set(name, child);
+  const ok = await waitForRegistration(name);
+  if (!ok) {
+    try { child.kill("SIGTERM"); } catch { /* ignore */ }
+    children.delete(name);
+    return { ok: false, error: "did not register in time" };
+  }
+  return { ok: true, name };
+};
+
 const sonnetHandlers = makeClaudeHandlers({
   model: roles.sonnet.model,
   systemPrompt: roles.sonnet.systemPrompt,
@@ -55,6 +99,9 @@ const sonnetHandlers = makeClaudeHandlers({
   registry: registryClient,
   bearerToken: cfg.bearerToken,
   selfName: "sonnet",
+  spawnAgent,
+  availableRoles: () =>
+    Object.entries(roles).map(([name, r]) => ({ name, description: r.description, backend: r.backend, defaultModel: r.model })),
 });
 const sonnet = await startAgent({
   card: baseCard("sonnet", roles.sonnet),
@@ -108,7 +155,13 @@ await probe(
   "Call list_my_threads and tell me how many active threads you have, what peer they're with, and the turn count.",
 );
 
-console.log("\n--- test 4 (depth guard via raw fetch with x-depth: 2) ---");
+await probe(
+  "test 4 (sonnet spawns a new agent named gemma-helper)",
+  "sonnet",
+  "Spawn a new gemma3 agent named 'gemma-helper' using the model 'gemma3:1b' (the local 1B variant — pass it via the model parameter to spawn_agent). After it registers, delegate_start a task asking it 'what color is the sky?'. Report what it said in one short sentence.",
+);
+
+console.log("\n--- test 5 (depth guard via raw fetch with x-depth: 2) ---");
 const rejectRes = await fetch(`${gemma.card.url}/message/send`, {
   method: "POST",
   headers: {
@@ -127,6 +180,15 @@ console.log("\n--- ThreadStore state ---");
 const finalThreads = await threads.list(replContextId);
 for (const t of finalThreads) {
   console.log(`  ${t.peer}/${t.threadId.slice(0, 8)}  turns=${t.turnCount}  title="${t.title}"`);
+}
+
+// Kill spawned subprocesses
+for (const [name, child] of children) {
+  try {
+    await registryClient.deregister(name);
+  } catch { /* ignore */ }
+  try { child.kill("SIGTERM"); } catch { /* ignore */ }
+  try { await child.status; } catch { /* ignore */ }
 }
 
 await gemma.shutdown();

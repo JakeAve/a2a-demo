@@ -6,6 +6,12 @@ import type { ThreadStore } from "../store/threads.ts";
 import type { RegistryClient } from "../registry/client.ts";
 import { sendMessage } from "../protocol/client.ts";
 
+export type SpawnResult = {
+  ok: boolean;
+  name?: string;
+  error?: string;
+};
+
 export type ClaudeDeps = {
   model: string;
   systemPrompt: string;
@@ -15,6 +21,11 @@ export type ClaudeDeps = {
   registry: RegistryClient;
   bearerToken: string;
   selfName: string;
+  // Optional. When provided, this agent gains the `list_roles` and
+  // `spawn_agent` tools. The orchestrator wires this; standalone agents
+  // do not (they cannot spawn further agents themselves).
+  spawnAgent?: (role: string, name?: string, model?: string) => Promise<SpawnResult>;
+  availableRoles?: () => Array<{ name: string; description: string; backend: string; defaultModel: string }>;
 };
 
 function userText(ctx: AgentHandlerCtx): string {
@@ -32,7 +43,7 @@ function toAnthropic(
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 }
 
-const TOOLS = [
+const BASE_TOOLS = [
   {
     name: "list_agents",
     description:
@@ -96,7 +107,38 @@ const TOOLS = [
   },
 ];
 
-const SYSTEM_SUFFIX = `
+const SPAWN_TOOLS = [
+  {
+    name: "list_roles",
+    description:
+      "List role presets available to spawn_agent. Returns { name, description, backend } for each role.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "spawn_agent",
+    description:
+      "Launch a new peer agent of the given role as its own subprocess. Returns { ok, name } when the new agent has registered with the registry. Use this when the existing peer set doesn't cover the task. Then call list_agents to see the new peer and delegate_start to use it.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        role: { type: "string", description: "Role name from list_roles" },
+        name: {
+          type: "string",
+          description:
+            "Optional unique name for the spawned agent (defaults to role). Required if you want multiple agents of the same role.",
+        },
+        model: {
+          type: "string",
+          description:
+            "Optional model override (e.g. 'gemma3:1b', 'llama3.1'). Defaults to the role's defaultModel. Use list_roles to see defaults.",
+        },
+      },
+      required: ["role"],
+    },
+  },
+];
+
+const DELEGATION_SUFFIX = `
 
 Delegation tools available to you:
 - list_agents: discover which peer agents exist.
@@ -106,6 +148,12 @@ Delegation tools available to you:
 - reset_thread(threadId): drop a finished sub-conversation.
 
 Prefer delegate_continue when the user is iterating on something a peer already produced ("ask gemma again", "refine that", "now make it darker"). Use delegate_start for unrelated tasks. Always call list_my_threads if you're unsure whether an existing thread already covers the request.`;
+
+const SPAWN_SUFFIX = `
+
+Agent lifecycle tools available to you:
+- list_roles: see which role presets you can spawn.
+- spawn_agent(role, name?): boot a new peer agent as its own process. The new agent registers itself; afterwards list_agents will include it and delegate_start can target it. Use when the existing peer set doesn't cover the task.`;
 
 function truncate(s: string, max = 80): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
@@ -207,11 +255,34 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
         return JSON.stringify({ ok });
       }
 
+      if (name === "list_roles") {
+        if (!deps.availableRoles) {
+          return JSON.stringify({ error: "spawn capability not available in this agent" });
+        }
+        return JSON.stringify(deps.availableRoles());
+      }
+
+      if (name === "spawn_agent") {
+        if (!deps.spawnAgent) {
+          return JSON.stringify({ error: "spawn capability not available in this agent" });
+        }
+        const role = String(args.role);
+        const name = typeof args.name === "string" && args.name.trim() ? args.name : undefined;
+        const model = typeof args.model === "string" && args.model.trim() ? args.model : undefined;
+        const result = await deps.spawnAgent(role, name, model);
+        return JSON.stringify(result);
+      }
+
       return JSON.stringify({ error: `unknown tool ${name}` });
     } catch (e) {
       return JSON.stringify({ error: (e as Error).message });
     }
   }
+
+  const tools = deps.spawnAgent ? [...BASE_TOOLS, ...SPAWN_TOOLS] : BASE_TOOLS;
+  const systemSuffix = deps.spawnAgent
+    ? DELEGATION_SUFFIX + SPAWN_SUFFIX
+    : DELEGATION_SUFFIX;
 
   async function handler(ctx: AgentHandlerCtx): Promise<{ text: string }> {
     const contextId = ctx.message.contextId ?? crypto.randomUUID();
@@ -226,8 +297,8 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
       const resp = await client.messages.create({
         model: deps.model,
         max_tokens: 1024,
-        system: deps.systemPrompt + SYSTEM_SUFFIX,
-        tools: TOOLS,
+        system: deps.systemPrompt + systemSuffix,
+        tools,
         messages,
       });
 

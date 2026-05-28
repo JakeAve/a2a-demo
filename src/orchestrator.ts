@@ -1,15 +1,33 @@
-import { type AppConfig, type AgentSpec } from "./config.ts";
+import { type AgentSpec, type AppConfig } from "./config.ts";
+import { roles } from "./roles.config.ts";
 import { startRegistry, type RegistryHandle } from "./registry/server.ts";
 import { RegistryClient } from "./registry/client.ts";
 import { startAgent, type AgentHandle } from "./agent/base.ts";
 import { makeOllamaHandlers } from "./agent/ollama.ts";
-import { makeClaudeHandlers } from "./agent/claude.ts";
+import { makeClaudeHandlers, type SpawnResult } from "./agent/claude.ts";
 import { ContextStore } from "./store/context.ts";
 import { ThreadStore } from "./store/threads.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 
-export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promise<void> {
+// Wait until the registry has an entry for `name`, or give up.
+async function waitForRegistration(
+  registry: RegistryClient,
+  name: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await registry.get(name)) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+export async function runOrchestrator(
+  cfg: AppConfig,
+  specs: AgentSpec[],
+): Promise<void> {
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
   const kv = await Deno.openKv();
@@ -20,6 +38,62 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
 
   const agents = new Map<string, AgentCard>();
   const handles: AgentHandle[] = [];
+  const children = new Map<string, Deno.ChildProcess>();
+
+  // Capability exposed to Claude-backed agents so they can spawn peers.
+  const availableRoles = () =>
+    Object.entries(roles).map(([name, r]) => ({
+      name,
+      description: r.description,
+      backend: r.backend,
+      defaultModel: r.model,
+    }));
+
+  const spawnAgent = async (
+    role: string,
+    customName?: string,
+    modelOverride?: string,
+  ): Promise<SpawnResult> => {
+    const preset = roles[role];
+    if (!preset) return { ok: false, error: `unknown role ${role}` };
+    const name = customName ?? role;
+    if (agents.has(name) || children.has(name)) {
+      return { ok: false, error: `agent "${name}" already running` };
+    }
+    const args = [
+      "run",
+      "--env-file=.env",
+      "--allow-net",
+      "--allow-env",
+      "--allow-read",
+      "--unstable-kv",
+      "src/agent-entry.ts",
+      `--role=${role}`,
+      `--name=${name}`,
+      `--registry=http://localhost:${registry.port}`,
+    ];
+    if (modelOverride) args.push(`--model=${modelOverride}`);
+    try {
+      const child = new Deno.Command(Deno.execPath(), {
+        args,
+        stdout: "inherit",
+        stderr: "inherit",
+      }).spawn();
+      children.set(name, child);
+      const ok = await waitForRegistration(registryClient, name);
+      if (!ok) {
+        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        children.delete(name);
+        return { ok: false, error: `agent "${name}" failed to register within timeout` };
+      }
+      const card = await registryClient.get(name);
+      if (card) agents.set(name, card);
+      console.log(`[${name}]   spawned (${preset.backend}/${role})`);
+      return { ok: true, name };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  };
 
   for (const spec of specs) {
     try {
@@ -43,6 +117,8 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
             registry: registryClient,
             bearerToken: cfg.bearerToken,
             selfName: spec.name,
+            spawnAgent,
+            availableRoles,
           })
         : makeOllamaHandlers({
             model: spec.model,
@@ -66,8 +142,17 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
     }
   }
 
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log("\nshutting down...");
+    for (const [name, child] of children) {
+      try {
+        await registryClient.deregister(name);
+      } catch { /* ignore */ }
+      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+    }
     for (const h of handles) {
       try { await registryClient.deregister(h.card.name); } catch { /* ignore */ }
       try { await h.shutdown(); } catch { /* ignore */ }
