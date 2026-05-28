@@ -1,8 +1,8 @@
 {
   "$schema": "./role.schema.json",
   "backend": "ollama",
-  "model": "gemma3",
-  "description": "Fast local generalist (gemma3 via Ollama)",
+  "model": "gemma3:1b",
+  "description": "Fast local generalist (gemma3:1b via Ollama)",
   "systemPrompt": "You are a fast helper. Answer concisely.",
   "skills": [
     { "id": "general", "name": "General", "description": "Cheap general-purpose assistant" }

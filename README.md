@@ -33,7 +33,7 @@ backs them — so a role can swap models without breaking how peers address it.
 |---|---|---|---|
 | `coordinator` | Claude API (`claude-sonnet-4-6`) | yes | Coordinator — delegates grunt work to peers |
 | `coordinator-max` | Claude subscription via Agent SDK (`claude-opus-4-8`) | yes | Same role on a Claude subscription (OAuth token, no API key needed) |
-| `scout` | Ollama (`gemma3`) | no | Fast local generalist |
+| `scout` | Ollama (`gemma3:1b`) | no | Fast local generalist |
 | `analyst` | Ollama (`gemma4:e4b`) | yes | Tool-capable local reasoner |
 | `code-reviewer` | Ollama (`gemma4:e4b`) | yes | Reviews code/diffs for bugs |
 | `summarizer` | Ollama (`gemma3:1b`) | no | Condenses long text |
