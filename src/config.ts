@@ -4,6 +4,7 @@ import type { RolePreset } from "./roles.ts";
 export type AppConfig = {
   registryPort: number;
   anthropicApiKey: string;
+  claudeCodeOauthToken: string;
   bearerToken: string;
   ollamaBaseUrl: string;
 };
@@ -20,6 +21,7 @@ export async function loadConfig(): Promise<AppConfig> {
   return {
     registryPort: Number(env.REGISTRY_PORT ?? 7890),
     anthropicApiKey: env.ANTHROPIC_API_KEY ?? "",
+    claudeCodeOauthToken: env.CLAUDE_CODE_OAUTH_TOKEN ?? "",
     bearerToken: env.AGENT_BEARER_TOKEN ?? "local-dev-secret",
     ollamaBaseUrl: env.OLLAMA_BASE_URL ?? "http://localhost:11434",
   };
