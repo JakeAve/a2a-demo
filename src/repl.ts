@@ -50,6 +50,11 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
         },
       })) {
         if (ev.type === "delta") Deno.stdout.writeSync(enc.encode(ev.text));
+        else if (ev.type === "tool") {
+          const argsStr = JSON.stringify(ev.args);
+          const compact = argsStr.length > 80 ? argsStr.slice(0, 77) + "…" : argsStr;
+          Deno.stdout.writeSync(enc.encode(`\n  · ${ev.name}${compact}\n  `));
+        }
         else if (ev.type === "error") Deno.stdout.writeSync(enc.encode(`\n[error] ${ev.message}`));
         else if (ev.type === "done") break;
       }

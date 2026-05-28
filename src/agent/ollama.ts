@@ -119,62 +119,103 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
   async function* streamHandler(
     ctx: AgentHandlerCtx,
   ): AsyncGenerator<StreamEvent> {
-    // When tools are wired, the tool loop forces non-streaming under the
-    // hood. We chunk the final text for a streaming-feel SSE response.
-    if (deps.tools) {
-      const result = await handler(ctx);
-      const chunkSize = 40;
-      for (let i = 0; i < result.text.length; i += chunkSize) {
-        yield { type: "delta", text: result.text.slice(i, i + chunkSize) };
-      }
-      yield { type: "done" };
-      return;
-    }
-
-    // Plain streaming path (no tools).
     const contextId = ctx.message.contextId ?? crypto.randomUUID();
     const prompt = userText(ctx);
     await deps.store.append(contextId, { role: "user", content: prompt });
-    const history = await deps.store.get(contextId);
-    const res = await fetch(`${deps.baseUrl}/api/chat`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+
+    const messages: OllamaChatMessage[] = [
+      { role: "system", content: buildSystem(deps) },
+      ...historyToOllama(await deps.store.get(contextId)),
+    ];
+
+    let finalText = "";
+
+    // One iteration = one model turn. If the turn ends with tool_calls,
+    // execute them and loop. If not, we're done.
+    for (let iter = 0; iter < 8; iter++) {
+      const body: Record<string, unknown> = {
         model: deps.model,
-        messages: [
-          { role: "system", content: deps.systemPrompt },
-          ...history,
-        ],
+        messages,
         stream: true,
-      }),
-    });
-    if (!res.ok || !res.body) {
-      yield { type: "error", message: `ollama ${res.status}` };
-      return;
-    }
-    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buf = "";
-    let full = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += value;
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line) continue;
-        try {
-          const obj = JSON.parse(line);
-          const delta: string = obj?.message?.content ?? "";
-          if (delta) {
-            full += delta;
-            yield { type: "delta", text: delta };
-          }
-        } catch { /* skip */ }
+      };
+      if (tools) body.tools = tools;
+
+      const res = await fetch(`${deps.baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok || !res.body) {
+        yield { type: "error", message: `ollama ${res.status}` };
+        return;
+      }
+
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buf = "";
+      let turnContent = "";
+      let turnToolCalls: OllamaToolCall[] = [];
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += value;
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          try {
+            const obj = JSON.parse(line);
+            const msg = obj?.message ?? {};
+            const delta: string = msg.content ?? "";
+            if (delta) {
+              turnContent += delta;
+              yield { type: "delta", text: delta };
+            }
+            if (Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+              turnToolCalls = msg.tool_calls;
+              for (const tc of msg.tool_calls) {
+                yield {
+                  type: "tool",
+                  name: tc?.function?.name ?? "unknown",
+                  args: tc?.function?.arguments,
+                };
+              }
+            }
+          } catch { /* skip */ }
+        }
+      }
+
+      if (!deps.tools || turnToolCalls.length === 0) {
+        finalText = turnContent;
+        break;
+      }
+
+      // Tool-using turn: append the assistant's intent + run each tool,
+      // then iterate. We don't carry turnContent into finalText because
+      // it's typically empty during tool-decision turns.
+      messages.push({
+        role: "assistant",
+        content: turnContent,
+        tool_calls: turnToolCalls,
+      });
+      for (const tc of turnToolCalls) {
+        const result = await runTool(
+          deps.tools,
+          tc.function.name,
+          tc.function.arguments ?? {},
+          ctx.depth,
+          contextId,
+        );
+        messages.push({
+          role: "tool",
+          content: result,
+          tool_call_id: tc.id,
+        });
       }
     }
-    await deps.store.append(contextId, { role: "assistant", content: full });
+
+    await deps.store.append(contextId, { role: "assistant", content: finalText });
     yield { type: "done" };
   }
 

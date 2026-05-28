@@ -1,0 +1,116 @@
+// Verify Ollama streaming with tool calls: stream tokens to the client
+// AND surface tool events as they happen, then keep streaming the
+// post-tool-call response.
+import { loadConfig } from "../src/config.ts";
+import { startRegistry } from "../src/registry/server.ts";
+import { RegistryClient } from "../src/registry/client.ts";
+import { startAgent } from "../src/agent/base.ts";
+import { makeOllamaHandlers } from "../src/agent/ollama.ts";
+import { ContextStore } from "../src/store/context.ts";
+import { ThreadStore } from "../src/store/threads.ts";
+import { streamMessage } from "../src/protocol/client.ts";
+import { roles } from "../src/roles.config.ts";
+import type { AgentCard } from "../src/protocol/types.ts";
+
+const cfg = await loadConfig();
+const registry = await startRegistry(0);
+const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
+const kv = await Deno.openKv();
+const store = new ContextStore(kv);
+const threads = new ThreadStore(kv);
+
+const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
+  name,
+  description: preset.description,
+  version: "1.0.0",
+  url: "http://localhost:0",
+  skills: preset.skills,
+  securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+  security: [{ bearer: [] }],
+});
+
+const workerHandlers = makeOllamaHandlers({
+  model: "gemma3:1b",
+  systemPrompt: roles.gemma3.systemPrompt,
+  baseUrl: cfg.ollamaBaseUrl,
+  store,
+});
+const worker = await startAgent({
+  card: baseCard("gemma3", roles.gemma3),
+  bearerToken: cfg.bearerToken,
+  handler: workerHandlers.handler,
+  streamHandler: workerHandlers.streamHandler,
+});
+await registryClient.register(worker.card);
+
+const captainHandlers = makeOllamaHandlers({
+  model: "gemma4:e4b",
+  systemPrompt: roles.gemma4.systemPrompt,
+  baseUrl: cfg.ollamaBaseUrl,
+  store,
+  tools: {
+    store,
+    threads,
+    registry: registryClient,
+    bearerToken: cfg.bearerToken,
+    selfName: "gemma4",
+  },
+});
+const captain = await startAgent({
+  card: baseCard("gemma4", roles.gemma4),
+  bearerToken: cfg.bearerToken,
+  handler: captainHandlers.handler,
+  streamHandler: captainHandlers.streamHandler,
+});
+await registryClient.register(captain.card);
+
+console.log(`[registry] localhost:${registry.port}`);
+console.log(`[gemma3]   ${worker.card.url}  (gemma3:1b)`);
+console.log(`[gemma4]   ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`);
+console.log();
+
+const start = Date.now();
+const contextId = crypto.randomUUID();
+const prompt = "Ask gemma3 to pick one number between 1 and 10. After getting the answer back, say 'gemma3 chose N' and that's all.";
+console.log(`> ${prompt}\n`);
+console.log("(streaming events below)");
+
+let deltaCount = 0;
+let toolCount = 0;
+let firstByteAt = 0;
+
+for await (const ev of streamMessage({
+  url: captain.card.url,
+  token: cfg.bearerToken,
+  depth: 0,
+  message: {
+    messageId: crypto.randomUUID(),
+    role: "user",
+    parts: [{ type: "text", text: prompt }],
+    contextId,
+  },
+})) {
+  if (ev.type === "delta") {
+    if (!firstByteAt) firstByteAt = Date.now() - start;
+    deltaCount++;
+    await Deno.stdout.write(new TextEncoder().encode(ev.text));
+  } else if (ev.type === "tool") {
+    toolCount++;
+    console.log(`\n  [tool-event] ${ev.name}(${JSON.stringify(ev.args)})`);
+  } else if (ev.type === "error") {
+    console.log(`\n  [error] ${ev.message}`);
+  } else if (ev.type === "done") {
+    break;
+  }
+}
+
+console.log(`\n\n--- stats ---`);
+console.log(`time-to-first-byte: ${firstByteAt}ms`);
+console.log(`total: ${Date.now() - start}ms`);
+console.log(`delta events: ${deltaCount}`);
+console.log(`tool events:  ${toolCount}`);
+
+await worker.shutdown();
+await captain.shutdown();
+await registry.shutdown();
+kv.close();
