@@ -32,12 +32,12 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
 
 const workerHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.gemma3.systemPrompt,
+  systemPrompt: roles.scout.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
 const worker = await startAgent({
-  card: baseCard("gemma3", roles.gemma3),
+  card: baseCard("scout", roles.scout),
   bearerToken: cfg.bearerToken,
   handler: workerHandlers.handler,
   streamHandler: workerHandlers.streamHandler,
@@ -46,7 +46,7 @@ await registryClient.register(worker.card);
 
 const captainHandlers = makeOllamaHandlers({
   model: "gemma4:e4b",
-  systemPrompt: roles.gemma4.systemPrompt,
+  systemPrompt: roles.analyst.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
   tools: {
@@ -54,11 +54,11 @@ const captainHandlers = makeOllamaHandlers({
     threads,
     registry: registryClient,
     bearerToken: cfg.bearerToken,
-    selfName: "gemma4",
+    selfName: "analyst",
   },
 });
 const captain = await startAgent({
-  card: baseCard("gemma4", roles.gemma4),
+  card: baseCard("analyst", roles.analyst),
   bearerToken: cfg.bearerToken,
   handler: captainHandlers.handler,
   streamHandler: captainHandlers.streamHandler,
@@ -66,13 +66,13 @@ const captain = await startAgent({
 await registryClient.register(captain.card);
 
 console.log(`[registry] localhost:${registry.port}`);
-console.log(`[gemma3]   ${worker.card.url}  (gemma3:1b)`);
-console.log(`[gemma4]   ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`);
+console.log(`[scout]    ${worker.card.url}  (gemma3:1b)`);
+console.log(`[analyst]  ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`);
 console.log();
 
 const start = Date.now();
 const contextId = crypto.randomUUID();
-const prompt = "Ask gemma3 to pick one number between 1 and 10. After getting the answer back, say 'gemma3 chose N' and that's all.";
+const prompt = "Ask scout to pick one number between 1 and 10. After getting the answer back, say 'scout chose N' and that's all.";
 console.log(`> ${prompt}\n`);
 console.log("(streaming events below)");
 

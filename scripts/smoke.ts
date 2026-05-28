@@ -33,20 +33,20 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
   security: [{ bearer: [] }],
 });
 
-const gemmaHandlers = makeOllamaHandlers({
+const scoutHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.gemma3.systemPrompt,
+  systemPrompt: roles.scout.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
-const gemma = await startAgent({
-  card: baseCard("gemma3", roles.gemma3),
+const scout = await startAgent({
+  card: baseCard("scout", roles.scout),
   bearerToken: cfg.bearerToken,
-  handler: gemmaHandlers.handler,
-  streamHandler: gemmaHandlers.streamHandler,
+  handler: scoutHandlers.handler,
+  streamHandler: scoutHandlers.streamHandler,
 });
-await registryClient.register(gemma.card);
-console.log(`[gemma3]  ${gemma.card.url}`);
+await registryClient.register(scout.card);
+console.log(`[scout]  ${scout.card.url}`);
 
 const children = new Map<string, Deno.ChildProcess>();
 async function waitForRegistration(name: string, timeoutMs = 15_000): Promise<boolean> {
@@ -91,29 +91,29 @@ const spawnAgent = async (role: string, customName?: string, modelOverride?: str
   return { ok: true, name };
 };
 
-const sonnetHandlers = makeClaudeHandlers({
-  model: roles.sonnet.model,
-  systemPrompt: roles.sonnet.systemPrompt,
+const coordinatorHandlers = makeClaudeHandlers({
+  model: roles.coordinator.model,
+  systemPrompt: roles.coordinator.systemPrompt,
   apiKey: cfg.anthropicApiKey,
   store,
   threads,
   registry: registryClient,
   bearerToken: cfg.bearerToken,
-  selfName: "sonnet",
+  selfName: "coordinator",
   spawnAgent,
   availableRoles: () =>
     Object.entries(roles).map(([name, r]) => ({ name, description: r.description, backend: r.backend, defaultModel: r.model })),
 });
-const sonnet = await startAgent({
-  card: baseCard("sonnet", roles.sonnet),
+const coordinator = await startAgent({
+  card: baseCard("coordinator", roles.coordinator),
   bearerToken: cfg.bearerToken,
-  handler: sonnetHandlers.handler,
-  streamHandler: sonnetHandlers.streamHandler,
+  handler: coordinatorHandlers.handler,
+  streamHandler: coordinatorHandlers.streamHandler,
 });
-await registryClient.register(sonnet.card);
-console.log(`[sonnet]  ${sonnet.card.url}`);
+await registryClient.register(coordinator.card);
+console.log(`[coordinator]  ${coordinator.card.url}`);
 
-// Single REPL-like contextId so each probe shares sonnet's view of the world.
+// Single REPL-like contextId so each probe shares the coordinator's view of the world.
 const replContextId = crypto.randomUUID();
 
 async function probe(label: string, target: string, text: string) {
@@ -122,7 +122,7 @@ async function probe(label: string, target: string, text: string) {
   const start = Date.now();
   try {
     const res = await sendMessage({
-      url: target === "sonnet" ? sonnet.card.url : gemma.card.url,
+      url: target === "coordinator" ? coordinator.card.url : scout.card.url,
       token: cfg.bearerToken,
       depth: 0,
       message: {
@@ -139,31 +139,31 @@ async function probe(label: string, target: string, text: string) {
 }
 
 await probe(
-  "test 1 (sonnet starts a delegation thread)",
-  "sonnet",
-  "Use delegate_start to ask gemma3 to write a 5-7-5 haiku about frogs. Just report the haiku back to me with no commentary.",
+  "test 1 (coordinator starts a delegation thread)",
+  "coordinator",
+  "Use delegate_start to ask scout to write a 5-7-5 haiku about frogs. Just report the haiku back to me with no commentary.",
 );
 
 await probe(
-  "test 2 (sonnet should continue the SAME thread)",
-  "sonnet",
-  "Now ask gemma3 to make that haiku darker and more melancholic. Use delegate_continue so gemma3 remembers the original.",
+  "test 2 (coordinator should continue the SAME thread)",
+  "coordinator",
+  "Now ask scout to make that haiku darker and more melancholic. Use delegate_continue so scout remembers the original.",
 );
 
 await probe(
-  "test 3 (sonnet lists its threads)",
-  "sonnet",
+  "test 3 (coordinator lists its threads)",
+  "coordinator",
   "Call list_my_threads and tell me how many active threads you have, what peer they're with, and the turn count.",
 );
 
 await probe(
-  "test 4 (sonnet spawns a new agent named gemma-helper)",
-  "sonnet",
-  "Spawn a new gemma3 agent named 'gemma-helper' using the model 'gemma3:1b' (the local 1B variant — pass it via the model parameter to spawn_agent). After it registers, delegate_start a task asking it 'what color is the sky?'. Report what it said in one short sentence.",
+  "test 4 (coordinator spawns a new agent named scout-helper)",
+  "coordinator",
+  "Spawn a new scout agent named 'scout-helper' using the model 'gemma3:1b' (the local 1B variant — pass it via the model parameter to spawn_agent). After it registers, delegate_start a task asking it 'what color is the sky?'. Report what it said in one short sentence.",
 );
 
 console.log("\n--- test 5 (depth guard via raw fetch with x-depth: 2) ---");
-const rejectRes = await fetch(`${gemma.card.url}/message/send`, {
+const rejectRes = await fetch(`${scout.card.url}/message/send`, {
   method: "POST",
   headers: {
     "content-type": "application/json",
@@ -188,15 +188,15 @@ if (cfg.claudeCodeOauthToken || cfg.anthropicApiKey) {
   const { makeClaudeCodeHandlers } = await import("../src/agent/claude-code.ts");
   const { SessionStore } = await import("../src/store/sessions.ts");
   const ccHandlers = makeClaudeCodeHandlers({
-    model: roles["opus-sub"].model,
-    systemPrompt: roles["opus-sub"].systemPrompt,
+    model: roles["coordinator-max"].model,
+    systemPrompt: roles["coordinator-max"].systemPrompt,
     oauthToken: cfg.claudeCodeOauthToken,
     apiKey: cfg.anthropicApiKey,
     store, threads, sessions: new SessionStore(kv), registry: registryClient,
-    bearerToken: cfg.bearerToken, selfName: "opus-sub",
+    bearerToken: cfg.bearerToken, selfName: "coordinator-max",
   });
   const ccAgent = await startAgent({
-    card: baseCard("opus-sub", roles["opus-sub"]),
+    card: baseCard("coordinator-max", roles["coordinator-max"]),
     bearerToken: cfg.bearerToken,
     handler: ccHandlers.handler, streamHandler: ccHandlers.streamHandler,
   });
@@ -206,7 +206,7 @@ if (cfg.claudeCodeOauthToken || cfg.anthropicApiKey) {
     message: { messageId: crypto.randomUUID(), role: "user",
       parts: [{ type: "text", text: "Reply with one word: PONG" }], contextId: crypto.randomUUID() },
   });
-  console.log(`[opus-sub] -> ${res.text}`);
+  console.log(`[coordinator-max] -> ${res.text}`);
   await ccAgent.shutdown();
 }
 
@@ -219,8 +219,8 @@ for (const [name, child] of children) {
   try { await child.status; } catch { /* ignore */ }
 }
 
-await gemma.shutdown();
-await sonnet.shutdown();
+await scout.shutdown();
+await coordinator.shutdown();
 await registry.shutdown();
 kv.close();
 console.log("\nshutdown complete.");

@@ -10,7 +10,7 @@ export type AppConfig = {
 };
 
 export type AgentSpec = {
-  name: string;       // identity (e.g. "gemma3")
+  name: string;       // identity (e.g. "scout")
   preset: RolePreset; // role config
   model: string;      // resolved model (preset.model or CLI override)
 };
@@ -40,7 +40,7 @@ export function assertBackendCredentials(specs: AgentSpec[], cfg: AppConfig): vo
   }
 }
 
-// Parse "sonnet,gemma3:gemma3:1b,code-reviewer" → AgentSpec[]
+// Parse "coordinator,scout:gemma3:1b,code-reviewer" → AgentSpec[]
 // Splits on the FIRST colon only so model tags like "gemma3:1b" survive.
 export function parseAgentsFlag(
   raw: string,

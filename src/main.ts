@@ -8,7 +8,7 @@ function getAgentsFlag(args: string[]): string {
   }
   const i = args.indexOf("--agents");
   if (i !== -1 && args[i + 1]) return args[i + 1];
-  return "sonnet,gemma3";
+  return "coordinator,scout";
 }
 
 const cfg = await loadConfig();

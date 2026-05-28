@@ -1,7 +1,7 @@
-// Probe: can gemma4:e4b act as a tool-capable A2A agent that itself
-// delegates to a smaller peer? Boots gemma4 (tool-capable) + gemma3:1b
-// (passive worker). User asks gemma4 a question; gemma4 should choose
-// to call delegate_start on gemma3 to actually answer.
+// Probe: can the tool-capable analyst (gemma4:e4b) act as an A2A agent that
+// itself delegates to a smaller peer? Boots analyst (tool-capable) + scout
+// (gemma3:1b, passive worker). User asks analyst a question; analyst should
+// choose to call delegate_start on scout to actually answer.
 import { loadConfig } from "../src/config.ts";
 import { startRegistry } from "../src/registry/server.ts";
 import { RegistryClient } from "../src/registry/client.ts";
@@ -33,26 +33,26 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
   security: [{ bearer: [] }],
 });
 
-// gemma3:1b — passive worker (no tools)
+// scout (gemma3:1b) — passive worker (no tools)
 const workerHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.gemma3.systemPrompt,
+  systemPrompt: roles.scout.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
 const worker = await startAgent({
-  card: baseCard("gemma3", roles.gemma3),
+  card: baseCard("scout", roles.scout),
   bearerToken: cfg.bearerToken,
   handler: workerHandlers.handler,
   streamHandler: workerHandlers.streamHandler,
 });
 await registryClient.register(worker.card);
-console.log(`[gemma3]  ${worker.card.url} (gemma3:1b, no tools)`);
+console.log(`[scout]  ${worker.card.url} (gemma3:1b, no tools)`);
 
-// gemma4:e4b — tool-capable
+// analyst (gemma4:e4b) — tool-capable
 const captainHandlers = makeOllamaHandlers({
   model: "gemma4:e4b",
-  systemPrompt: roles.gemma4.systemPrompt,
+  systemPrompt: roles.analyst.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
   tools: {
@@ -60,18 +60,18 @@ const captainHandlers = makeOllamaHandlers({
     threads,
     registry: registryClient,
     bearerToken: cfg.bearerToken,
-    selfName: "gemma4",
+    selfName: "analyst",
     // no spawnAgent — keep it simple
   },
 });
 const captain = await startAgent({
-  card: baseCard("gemma4", roles.gemma4),
+  card: baseCard("analyst", roles.analyst),
   bearerToken: cfg.bearerToken,
   handler: captainHandlers.handler,
   streamHandler: captainHandlers.streamHandler,
 });
 await registryClient.register(captain.card);
-console.log(`[gemma4]  ${captain.card.url} (gemma4:e4b, A2A tools enabled)`);
+console.log(`[analyst]  ${captain.card.url} (gemma4:e4b, A2A tools enabled)`);
 
 const replContextId = crypto.randomUUID();
 
@@ -81,7 +81,7 @@ async function ask(label: string, target: string, text: string) {
   const start = Date.now();
   try {
     const res = await sendMessage({
-      url: target === "gemma4" ? captain.card.url : worker.card.url,
+      url: target === "analyst" ? captain.card.url : worker.card.url,
       token: cfg.bearerToken,
       depth: 0,
       message: {
@@ -98,14 +98,14 @@ async function ask(label: string, target: string, text: string) {
 }
 
 await ask(
-  "test 1 — gemma4 should delegate to gemma3",
-  "gemma4",
-  "You have access to a peer agent named 'gemma3'. Use delegate_start to ask gemma3 'what color is the sky?'. Then report exactly what gemma3 said.",
+  "test 1 — analyst should delegate to scout",
+  "analyst",
+  "You have access to a peer agent named 'scout'. Use delegate_start to ask scout 'what color is the sky?'. Then report exactly what scout said.",
 );
 
 await ask(
-  "test 2 — gemma4 discovers its peers first",
-  "gemma4",
+  "test 2 — analyst discovers its peers first",
+  "analyst",
   "Call list_agents to see what peers exist, then pick one and use delegate_start to ask 'name three fruits'. Report the answer.",
 );
 

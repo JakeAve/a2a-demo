@@ -18,7 +18,7 @@ async function makeDeps() {
       model: "claude-opus-4-8", systemPrompt: "be brief",
       oauthToken: "sk-oat", apiKey: "",
       store: new ContextStore(kv), threads: new ThreadStore(kv), sessions: new SessionStore(kv),
-      registry: {} as RegistryClient, bearerToken: "t", selfName: "opus-sub",
+      registry: {} as RegistryClient, bearerToken: "t", selfName: "coordinator-max",
     },
   };
 }

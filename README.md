@@ -10,13 +10,13 @@ shared bearer token.
 
     cp .env.example .env
     # edit ANTHROPIC_API_KEY
-    deno task start --agents="sonnet,gemma3,gemma4"
+    deno task start --agents="coordinator,scout,analyst"
 
 In the REPL:
 
-    > @sonnet ask gemma3 to write a haiku about frogs, then make it darker
+    > @coordinator ask scout to write a haiku about frogs, then make it darker
     > @researcher decompose: what's the difference between TCP and UDP?
-    > @gemma4 use list_agents, then delegate a math question to a peer
+    > @analyst use list_agents, then delegate a math question to a peer
 
 `@<name>` routes a prompt to that agent. Streaming token output and live
 `· tool_name{args}` events appear inline.
@@ -26,32 +26,36 @@ In the REPL:
 Each agent is defined by a JSON file in `agents/`. The filename (minus
 `.json`) is the role name.
 
+Agent names are identities, deliberately **decoupled from the model** that
+backs them — so a role can swap models without breaking how peers address it.
+
 | Role | Backend | Tools | Purpose |
 |---|---|---|---|
-| `sonnet` | Claude Sonnet | yes | Coordinator — delegates grunt work to peers |
-| `gemma3` | Ollama (`gemma3`) | no | Fast local generalist |
-| `gemma4` | Ollama (`gemma4:e4b`) | yes | Tool-capable local reasoner |
+| `coordinator` | Claude API (`claude-sonnet-4-6`) | yes | Coordinator — delegates grunt work to peers |
+| `coordinator-max` | Claude subscription via Agent SDK (`claude-opus-4-8`) | yes | Same role on a Claude subscription (OAuth token, no API key needed) |
+| `scout` | Ollama (`gemma3`) | no | Fast local generalist |
+| `analyst` | Ollama (`gemma4:e4b`) | yes | Tool-capable local reasoner |
 | `code-reviewer` | Ollama (`gemma4:e4b`) | yes | Reviews code/diffs for bugs |
 | `summarizer` | Ollama (`gemma3:1b`) | no | Condenses long text |
-| `researcher` | Claude Sonnet | yes | Decomposes questions, delegates, synthesizes |
+| `researcher` | Claude API (`claude-sonnet-4-6`) | yes | Decomposes questions, delegates, synthesizes |
 | `translator` | Ollama (`gemma4:e4b`) | no | Human-lang and natural↔structured translation |
 
 **Add a new agent:** drop `agents/<name>.json` matching the shape in
 `agents/role.schema.json`. Restart. No code changes needed.
 
-**Override a model at the CLI:** `--agents="sonnet,gemma3:gemma3:1b"`
-runs the `gemma3` role with the `gemma3:1b` tag.
+**Override a model at the CLI:** `--agents="coordinator,scout:gemma3:1b"`
+runs the `scout` role with the `gemma3:1b` tag.
 
 ## Architecture
 
 ```
-deno task start --agents="sonnet,gemma3,gemma4"
+deno task start --agents="coordinator,scout,analyst"
 
-  [registry]   localhost:7890          (only fixed port)
-  [sonnet]     localhost:<dynamic>     (HTTP server, Agent Card at /.well-known/agent.json)
-  [gemma3]     localhost:<dynamic>
-  [gemma4]     localhost:<dynamic>
-  [REPL]       stdin/stdout            (@mentions, live SSE)
+  [registry]      localhost:7890          (only fixed port)
+  [coordinator]   localhost:<dynamic>     (HTTP server, Agent Card at /.well-known/agent.json)
+  [scout]         localhost:<dynamic>
+  [analyst]       localhost:<dynamic>
+  [REPL]          stdin/stdout            (@mentions, live SSE)
 ```
 
 Each agent registers its Agent Card with the registry on boot. Peers
@@ -89,14 +93,14 @@ spawn capability — that authority lives only with the orchestrator.
 ### Depth guard
 
 Each `delegate_*` call increments an `x-depth` header. Depth ≥ 2 is
-rejected with HTTP 429. So `REPL → sonnet → gemma3` is fine; the next
+rejected with HTTP 429. So `REPL → coordinator → scout` is fine; the next
 hop would be `429 Too Many Delegations`.
 
 ### Standalone agents
 
 Spin up an agent in another terminal — it joins the same registry:
 
-    deno task start:agent --role=gemma4 --name=remote --registry=http://localhost:7890
+    deno task start:agent --role=analyst --name=remote --registry=http://localhost:7890
 
 Useful for running peers on different machines (subject to network
 config — see `TODO.md`'s multi-machine entry).
@@ -105,8 +109,8 @@ config — see `TODO.md`'s multi-machine entry).
 
 - `scripts/smoke.ts` — full Tier C round-trip (Claude + Ollama,
   delegate_start + delegate_continue + spawn_agent)
-- `scripts/smoke-gemma-tools.ts` — verify gemma4:e4b can call A2A tools
-  itself (no Claude in the loop)
+- `scripts/smoke-gemma-tools.ts` — verify the `analyst` role (gemma4:e4b)
+  can call A2A tools itself (no Claude in the loop)
 - `scripts/smoke-streaming-tools.ts` — verify streaming token output
   through the tool loop
 - `scripts/kv-dump.ts` — dump every thread + conversation history in

@@ -20,7 +20,7 @@ Deno.test("buildHandlers returns handler + streamHandler for a claude-code prese
   const h = buildHandlers({
     model: "claude-opus-4-8", preset, cfg,
     store: new ContextStore(kv), threads: new ThreadStore(kv), sessions: new SessionStore(kv),
-    registry: {} as RegistryClient, selfName: "opus-sub",
+    registry: {} as RegistryClient, selfName: "coordinator-max",
   });
   assertEquals(typeof h.handler, "function");
   assertEquals(typeof h.streamHandler, "function");

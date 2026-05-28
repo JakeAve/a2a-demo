@@ -54,12 +54,12 @@ Deno.test("validateRolePreset rejects non-boolean toolCapable", () => {
 Deno.test("loadRoles reads the project's agents/ directory", async () => {
   const roles = await loadRoles();
   // Filenames become role names.
-  assert(roles.sonnet, "sonnet should be loaded");
-  assert(roles.gemma3, "gemma3 should be loaded");
-  assert(roles.gemma4, "gemma4 should be loaded");
+  assert(roles.coordinator, "coordinator should be loaded");
+  assert(roles.scout, "scout should be loaded");
+  assert(roles.analyst, "analyst should be loaded");
   // toolCapable propagates correctly.
-  assertEquals(roles.sonnet.toolCapable, true);
-  assertEquals(roles.gemma4.toolCapable, true);
+  assertEquals(roles.coordinator.toolCapable, true);
+  assertEquals(roles.analyst.toolCapable, true);
   // role.schema.json is ignored.
   assert(!("role.schema" in roles), "role.schema should not be a role");
 });
@@ -71,9 +71,9 @@ Deno.test("loadRoles surfaces errors with file path", async () => {
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("loadRoles loads the opus-sub claude-code role", async () => {
+Deno.test("loadRoles loads the coordinator-max claude-code role", async () => {
   const roles = await loadRoles();
-  assert(roles["opus-sub"], "opus-sub should be loaded");
-  assertEquals(roles["opus-sub"].backend, "claude-code");
-  assertEquals(roles["opus-sub"].toolCapable, true);
+  assert(roles["coordinator-max"], "coordinator-max should be loaded");
+  assertEquals(roles["coordinator-max"].backend, "claude-code");
+  assertEquals(roles["coordinator-max"].toolCapable, true);
 });
