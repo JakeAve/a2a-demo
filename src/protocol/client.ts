@@ -19,7 +19,10 @@ export async function sendMessage(opts: SendOptions): Promise<SendResult> {
     },
     body: JSON.stringify({ message: opts.message }),
   });
-  if (res.status === 429) throw new Error("max delegation depth reached");
+  if (res.status === 429) {
+    await res.body?.cancel();
+    throw new Error("max delegation depth reached");
+  }
   if (!res.ok) throw new Error(`send failed: ${res.status} ${await res.text()}`);
   const json = await res.json();
   return { text: String(json.text ?? "") };

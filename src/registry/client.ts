@@ -10,12 +10,14 @@ export class RegistryClient {
       body: JSON.stringify(card),
     });
     if (!res.ok) throw new Error(`register failed: ${res.status}`);
+    await res.body?.cancel();
   }
 
   async deregister(name: string): Promise<void> {
-    await fetch(`${this.baseUrl}/register/${encodeURIComponent(name)}`, {
+    const res = await fetch(`${this.baseUrl}/register/${encodeURIComponent(name)}`, {
       method: "DELETE",
     });
+    await res.body?.cancel();
   }
 
   async list(): Promise<AgentCard[]> {
