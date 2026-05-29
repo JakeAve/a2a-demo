@@ -7,6 +7,7 @@ import {
   toOllamaTools,
   type ToolDeps,
 } from "./tools.ts";
+import type { WebSearchProvider } from "./web-search.ts";
 
 export type OllamaDeps = {
   model: string;
@@ -16,7 +17,34 @@ export type OllamaDeps = {
   // When provided, this Ollama agent will be wired with the same A2A tools
   // as the Claude backend. Requires a tool-capable model on the Ollama side.
   tools?: ToolDeps;
+  // When both are set, a web_search tool is exposed and backed by `search`.
+  webSearch?: boolean;
+  search?: WebSearchProvider;
 };
+
+// web_search tool definition in Ollama's function-call schema. Backend-agnostic
+// — the actual search is performed by the injected WebSearchProvider.
+const WEB_SEARCH_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "web_search",
+    description:
+      "Search the web for current, factual information. Returns a list of results with title, url, and a content snippet.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string", description: "The search query" } },
+      required: ["query"],
+    },
+  },
+};
+
+// Combined tool list: A2A tools (if any) plus web_search when a provider is
+// available. Exported for testing.
+export function buildOllamaTools(deps: OllamaDeps) {
+  const tools = deps.tools ? toOllamaTools(deps.tools) : [];
+  if (deps.webSearch && deps.search) return [...tools, WEB_SEARCH_TOOL];
+  return tools;
+}
 
 type OllamaToolCall = {
   id?: string;
@@ -51,8 +79,38 @@ function historyToOllama(
   }));
 }
 
+// Run one tool call: web_search goes to the injected provider, everything else
+// to the shared A2A tool runner.
+async function dispatchTool(
+  deps: OllamaDeps,
+  tc: OllamaToolCall,
+  ctx: AgentHandlerCtx,
+  contextId: string,
+): Promise<string> {
+  if (tc.function.name === "web_search" && deps.search) {
+    const query = String((tc.function.arguments ?? {}).query ?? "");
+    try {
+      const results = (await deps.search(query, 5)).map((r) => ({
+        title: r.title,
+        url: r.url,
+        content: r.content.length > 800 ? r.content.slice(0, 800) + "…" : r.content,
+      }));
+      return JSON.stringify({ results });
+    } catch (e) {
+      return JSON.stringify({ error: (e as Error).message });
+    }
+  }
+  if (deps.tools) {
+    return runTool(deps.tools, tc.function.name, tc.function.arguments ?? {}, ctx.depth, contextId, {
+      sessionId: ctx.sessionId,
+      requestId: ctx.requestId,
+    });
+  }
+  return JSON.stringify({ error: `unknown tool ${tc.function.name}` });
+}
+
 export function makeOllamaHandlers(deps: OllamaDeps) {
-  const tools = deps.tools ? toOllamaTools(deps.tools) : undefined;
+  const tools = buildOllamaTools(deps);
 
   async function handler(ctx: AgentHandlerCtx): Promise<{ text: string }> {
     const contextId = ctx.message.contextId ?? crypto.randomUUID();
@@ -71,7 +129,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         messages,
         stream: false,
       };
-      if (tools) body.tools = tools;
+      if (tools.length) body.tools = tools;
 
       const res = await fetch(`${deps.baseUrl}/api/chat`, {
         method: "POST",
@@ -86,7 +144,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
 
       if (content) finalText = content;
 
-      if (!deps.tools || toolCalls.length === 0) break;
+      if (tools.length === 0 || toolCalls.length === 0) break;
 
       // Append the assistant's tool-call message verbatim so the model sees
       // its own request when reasoning over results.
@@ -97,14 +155,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
       });
 
       for (const tc of toolCalls) {
-        const result = await runTool(
-          deps.tools,
-          tc.function.name,
-          tc.function.arguments ?? {},
-          ctx.depth,
-          contextId,
-          { sessionId: ctx.sessionId, requestId: ctx.requestId },
-        );
+        const result = await dispatchTool(deps, tc, ctx, contextId);
         messages.push({
           role: "tool",
           content: result,
@@ -139,7 +190,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         messages,
         stream: true,
       };
-      if (tools) body.tools = tools;
+      if (tools.length) body.tools = tools;
 
       const res = await fetch(`${deps.baseUrl}/api/chat`, {
         method: "POST",
@@ -187,7 +238,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         }
       }
 
-      if (!deps.tools || turnToolCalls.length === 0) {
+      if (tools.length === 0 || turnToolCalls.length === 0) {
         finalText = turnContent;
         break;
       }
@@ -201,14 +252,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         tool_calls: turnToolCalls,
       });
       for (const tc of turnToolCalls) {
-        const result = await runTool(
-          deps.tools,
-          tc.function.name,
-          tc.function.arguments ?? {},
-          ctx.depth,
-          contextId,
-          { sessionId: ctx.sessionId, requestId: ctx.requestId },
-        );
+        const result = await dispatchTool(deps, tc, ctx, contextId);
         messages.push({
           role: "tool",
           content: result,

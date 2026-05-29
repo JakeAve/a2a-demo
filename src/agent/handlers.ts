@@ -8,6 +8,7 @@ import type { StreamEvent } from "../protocol/client.ts";
 import type { AgentHandlerCtx } from "./base.ts";
 import type { ToolDeps } from "./tools.ts";
 import type { Emitter } from "../observability/emit.ts";
+import { selectSearchProvider } from "./web-search.ts";
 import { makeClaudeHandlers } from "./claude.ts";
 import { makeClaudeCodeHandlers } from "./claude-code.ts";
 import { makeOllamaHandlers } from "./ollama.ts";
@@ -60,5 +61,7 @@ export function buildHandlers(d: BuildHandlersDeps): Handlers {
           emit: d.emit,
         }
       : undefined,
+    webSearch: preset.webSearch,
+    search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
   });
 }

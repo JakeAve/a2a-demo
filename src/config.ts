@@ -7,6 +7,7 @@ export type AppConfig = {
   claudeCodeOauthToken: string;
   bearerToken: string;
   ollamaBaseUrl: string;
+  ollamaApiKey: string; // for Ollama's hosted web_search API (empty = no web search)
   monitorUrl: string; // empty string = disabled
   maxDepth: number; // 0 = peg to current agent count; >0 = fixed cap
 };
@@ -26,6 +27,7 @@ export async function loadConfig(): Promise<AppConfig> {
     claudeCodeOauthToken: env.CLAUDE_CODE_OAUTH_TOKEN ?? "",
     bearerToken: env.AGENT_BEARER_TOKEN ?? "local-dev-secret",
     ollamaBaseUrl: env.OLLAMA_BASE_URL ?? "http://localhost:11434",
+    ollamaApiKey: env.OLLAMA_API_KEY ?? "",
     monitorUrl: env.A2A_MONITOR_URL ?? "",
     maxDepth: Number(env.A2A_MAX_DEPTH ?? 0),
   };
