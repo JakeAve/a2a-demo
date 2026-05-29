@@ -8,5 +8,6 @@
     { "id": "research", "name": "Research", "description": "Decomposes questions and synthesizes peer responses" },
     { "id": "synthesis", "name": "Synthesis", "description": "Combines partial answers from peers into one coherent reply" }
   ],
-  "toolCapable": true
+  "toolCapable": true,
+  "webSearch": true
 }
