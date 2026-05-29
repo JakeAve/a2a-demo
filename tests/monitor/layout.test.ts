@@ -44,3 +44,81 @@ Deno.test("computeLayout omits the REPL lane for an MCP-driven session", () => {
   assertEquals(names[0], "mcp"); // the driver leads the lanes
   assertEquals(names.includes("scout"), true);
 });
+
+// ── Room events ───────────────────────────────────────────────────────────────
+
+const roomEvents = [
+  { sessionId: "s1", requestId: "room-1", seq: 10, ts: 1, agent: "room-broker", depth: 0,
+    roomId: "room-1", type: "room.created",
+    data: { title: "debate", members: ["analyst", "code-reviewer", "human"], maxTurns: 24 } },
+  { sessionId: "s1", requestId: "room-1", seq: 11, ts: 2, agent: "analyst", depth: 0,
+    roomId: "room-1", type: "room.post",
+    data: { from: "analyst", to: ["code-reviewer"], seq: 0, text: "What do you think?" } },
+  { sessionId: "s1", requestId: "room-1", seq: 12, ts: 3, agent: "human", depth: 0,
+    roomId: "room-1", type: "room.post",
+    data: { from: "human", to: ["*"], seq: 1, text: "Great question!" } },
+  { sessionId: "s1", requestId: "room-1", seq: 13, ts: 4, agent: "code-reviewer", depth: 0,
+    roomId: "room-1", type: "room.post",
+    data: { from: "code-reviewer", to: [], seq: 2, text: "I agree" } },
+  { sessionId: "s1", requestId: "room-1", seq: 14, ts: 5, agent: "room-broker", depth: 0,
+    roomId: "room-1", type: "room.idle", data: {} },
+];
+
+Deno.test("computeLayout adds room participants (including human) as lanes", () => {
+  const { lanes } = computeLayout(roomEvents);
+  const names = new Set(lanes.map((l) => l.agent));
+  assertEquals(names.has("analyst"), true);
+  assertEquals(names.has("code-reviewer"), true);
+  assertEquals(names.has("human"), true);
+  assertEquals(names.has("room-broker"), true);
+});
+
+Deno.test("computeLayout room.post with named recipient → kind:room arrow", () => {
+  const { arrows } = computeLayout(roomEvents);
+  const a = arrows.find((x) => x.kind === "room" && x.from === "analyst" && x.to === "code-reviewer");
+  assertEquals(a !== undefined, true);
+});
+
+Deno.test("computeLayout room.post with to:* → kind:room arrows to all other members", () => {
+  const { arrows } = computeLayout(roomEvents);
+  // human → * should fan out to analyst and code-reviewer (from room.created members)
+  const fans = arrows.filter((x) => x.kind === "room" && x.from === "human");
+  const tos = new Set(fans.map((x) => x.to));
+  assertEquals(tos.has("analyst"), true);
+  assertEquals(tos.has("code-reviewer"), true);
+  assertEquals(tos.has("human"), false); // sender excluded
+});
+
+Deno.test("computeLayout room.post with to:[] → kind:room-self self-loop", () => {
+  const { arrows } = computeLayout(roomEvents);
+  const a = arrows.find((x) => x.kind === "room-self" && x.from === "code-reviewer");
+  assertEquals(a !== undefined, true);
+  assertEquals(a!.to, "code-reviewer");
+});
+
+Deno.test("computeLayout room.created → kind:room-badge on room-broker lane", () => {
+  const { arrows } = computeLayout(roomEvents);
+  const badge = arrows.find((x) => x.kind === "room-badge" && x.event.type === "room.created");
+  assertEquals(badge !== undefined, true);
+  assertEquals(badge!.from, "room-broker");
+});
+
+Deno.test("computeLayout room.idle → kind:room-badge self-loop", () => {
+  const { arrows } = computeLayout(roomEvents);
+  const badge = arrows.find((x) => x.kind === "room-badge" && x.event.type === "room.idle");
+  assertEquals(badge !== undefined, true);
+  assertEquals(badge!.from, badge!.to);
+});
+
+Deno.test("computeLayout room events do not break existing delegation layout", () => {
+  // Mix delegation events with room events — delegation arrows must still appear.
+  const mixed = [
+    ...events, // the delegation fixture at the top of this file
+    ...roomEvents,
+  ];
+  const { arrows } = computeLayout(mixed);
+  const hasDelegate = arrows.some((a) => a.kind === "delegate");
+  const hasRoom = arrows.some((a) => a.kind === "room");
+  assertEquals(hasDelegate, true);
+  assertEquals(hasRoom, true);
+});
