@@ -15,6 +15,17 @@ const clip = (s, n) => {
   return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s;
 };
 
+// Render an inspector value. Tool args/results arrive as JSON strings; indent
+// them so nested structure is readable. Plain strings pass through untouched.
+const pretty = (v) => {
+  if (typeof v !== "string") return JSON.stringify(v, null, 2);
+  try {
+    const parsed = JSON.parse(v);
+    if (parsed && typeof parsed === "object") return JSON.stringify(parsed, null, 2);
+  } catch { /* not JSON — show as-is */ }
+  return v;
+};
+
 // The most useful one-line preview for each event kind, so the message is
 // readable on the wire without clicking through to the detail panel.
 function preview(e) {
@@ -117,10 +128,10 @@ export async function renderSwimlane(view, crumb, sessionId) {
       const e = events.find((x) => x.seq === selectedSeq);
       if (e) {
         document.getElementById("detail-body").innerHTML =
-          `<strong>${e.agent} · ${e.type}</strong>
-           <div class="mut">seq ${e.seq} · depth ${e.depth}${e.threadId ? " · thread " + e.threadId : ""}</div>
+          `<strong>${esc(e.agent)} · ${esc(e.type)}</strong>
+           <div class="mut">seq ${e.seq} · depth ${e.depth}${e.threadId ? " · thread " + esc(e.threadId) : ""}</div>
            ${Object.entries(e.data).map(([k, v]) =>
-             `<div class="bubble"><span class="mut">${k}</span>\n${typeof v === "string" ? v : JSON.stringify(v)}</div>`).join("")}`;
+             `<div class="bubble"><span class="mut">${esc(k)}</span>\n${esc(pretty(v))}</div>`).join("")}`;
       }
     }
   };
