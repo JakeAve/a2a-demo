@@ -18,6 +18,10 @@ export class MonitorStore {
   // In-memory next-seq cache per session; rehydrated from KV on miss.
   #nextSeq = new Map<string, number>();
 
+  // Per-session ingest queue: each new ingest for a session chains onto the
+  // last promise, serialising concurrent HTTP requests without a global lock.
+  #queue = new Map<string, Promise<A2AEvent>>();
+
   constructor(private kv: Deno.Kv) {}
 
   async #seqFor(sessionId: string): Promise<number> {
@@ -29,7 +33,10 @@ export class MonitorStore {
     return next;
   }
 
-  async ingest(input: EmitEvent | A2AEvent): Promise<A2AEvent> {
+  // Serialised work for a single ingest call (must not throw before it sets
+  // nextSeq — if it does, the queue stays broken for the session, which is
+  // acceptable: the whole request failed anyway).
+  async #doIngest(input: EmitEvent | A2AEvent): Promise<A2AEvent> {
     const seq = await this.#seqFor(input.sessionId);
     const event = parseEvent({ ...input, seq });
     this.#nextSeq.set(event.sessionId, seq + 1);
@@ -37,6 +44,18 @@ export class MonitorStore {
     await this.kv.set(["evt", event.sessionId, event.requestId, seq], event);
     await this.#updateSummary(event);
     return event;
+  }
+
+  ingest(input: EmitEvent | A2AEvent): Promise<A2AEvent> {
+    const sessionId = input.sessionId;
+    // Chain onto the previous in-flight ingest for this session so concurrent
+    // HTTP POSTs are serialised and seq numbers never collide.
+    const prev = this.#queue.get(sessionId) ?? Promise.resolve({} as A2AEvent);
+    const next = prev.then(() => this.#doIngest(input));
+    // Store a version that swallows errors so a failed ingest doesn't break the
+    // queue for subsequent callers.
+    this.#queue.set(sessionId, next.catch(() => ({} as A2AEvent)));
+    return next;
   }
 
   async #updateSummary(event: A2AEvent): Promise<void> {
