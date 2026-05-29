@@ -30,6 +30,10 @@ export type ClaudeDeps = {
   emit?: Emitter;
   // When true, expose Anthropic's server-side web_search tool to this agent.
   webSearch?: boolean;
+  // When set, room tools are exposed and backed by this broker client.
+  rooms?: ToolDeps["rooms"];
+  // Mutable per-agent holder for tracking the active room turn.
+  roomTurn?: ToolDeps["roomTurn"];
   // Test seam: inject a stub Anthropic client. Production leaves this unset and
   // a real client is constructed from apiKey.
   client?: Anthropic;
@@ -74,6 +78,8 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
     spawnAgent: deps.spawnAgent,
     availableRoles: deps.availableRoles,
     emit: deps.emit,
+    rooms: deps.rooms,
+    roomTurn: deps.roomTurn,
   };
   const tools = buildAnthropicTools(toolDeps, deps.webSearch);
   const systemSuffix = buildSystemSuffix(toolDeps);

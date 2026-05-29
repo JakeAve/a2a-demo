@@ -35,6 +35,8 @@ export type BuildHandlersDeps = {
   spawnAgent?: ToolDeps["spawnAgent"];
   availableRoles?: ToolDeps["availableRoles"];
   emit?: Emitter;
+  rooms?: import("../rooms/client.ts").RoomBrokerClient;
+  roomTurn?: import("../rooms/types.ts").RoomTurnState;
 };
 
 export async function buildHandlers(d: BuildHandlersDeps): Promise<Handlers> {
@@ -45,10 +47,12 @@ export async function buildHandlers(d: BuildHandlersDeps): Promise<Handlers> {
       store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
       selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
       emit: d.emit, webSearch: preset.webSearch,
+      rooms: d.rooms, roomTurn: d.roomTurn,
     });
   }
   if (preset.backend === "claude-code") {
     const { makeClaudeCodeHandlers } = await import("./claude-code.ts");
+    // TODO(plan-3): expose room tools to the claude-code MCP surface
     return makeClaudeCodeHandlers({
       model: d.model, systemPrompt: preset.systemPrompt,
       oauthToken: cfg.claudeCodeOauthToken, apiKey: cfg.anthropicApiKey,
@@ -66,6 +70,7 @@ export async function buildHandlers(d: BuildHandlersDeps): Promise<Handlers> {
           selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
           emit: d.emit,
           search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
+          rooms: d.rooms, roomTurn: d.roomTurn,
         }
       : undefined,
   });

@@ -16,6 +16,9 @@ import { buildHandlers } from "./agent/handlers.ts";
 import { RegistryClient } from "./registry/client.ts";
 import type { AgentCard } from "./protocol/types.ts";
 import { createEmitter } from "./observability/emit.ts";
+import { RoomBrokerClient } from "./rooms/client.ts";
+import { makeRoomTurnProcessor } from "./agent/room-turn.ts";
+import type { RoomTurnState } from "./rooms/types.ts";
 
 function getFlag(args: string[], name: string): string | undefined {
   for (const arg of args) {
@@ -46,6 +49,10 @@ const cfg = await loadConfig();
 const registryUrl = getFlag(Deno.args, "registry") ??
   Deno.env.get("REGISTRY_URL") ??
   `http://localhost:${cfg.registryPort}`;
+
+const brokerUrl = getFlag(Deno.args, "broker") ?? Deno.env.get("ROOM_BROKER_URL");
+const roomTurn: RoomTurnState = { active: null };
+const rooms = brokerUrl ? new RoomBrokerClient(brokerUrl, cfg.bearerToken) : undefined;
 
 try {
   assertBackendCredentials([{ name: agentName, preset, model }], cfg);
@@ -85,7 +92,15 @@ const handlers = await buildHandlers({
   selfName: agentName,
   // Spawned agents cannot spawn further agents — no spawnAgent/availableRoles.
   emit,
+  rooms,
+  roomTurn,
 });
+
+const onInbox = rooms
+  ? makeRoomTurnProcessor({
+      selfName: agentName, handler: handlers.handler, rooms, roomTurn, store,
+    })
+  : undefined;
 
 const handle = await startAgent({
   card: baseCard,
@@ -94,6 +109,7 @@ const handle = await startAgent({
   streamHandler: handlers.streamHandler,
   emit,
   maxDepth: resolveMaxDepth,
+  onInbox,
 });
 await registry.register(handle.card);
 console.log(`[${agentName}] ${handle.card.url} (${model})  registered with ${registryUrl}`);
