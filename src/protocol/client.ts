@@ -5,9 +5,18 @@ export type SendOptions = {
   token: string;           // bearer
   depth: number;           // current delegation depth (will be sent as x-depth)
   message: Message;
+  sessionId?: string;      // forwarded as x-session
+  requestId?: string;      // forwarded as x-request
 };
 
 export type SendResult = { text: string };
+
+function corrHeaders(opts: SendOptions): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (opts.sessionId) h["x-session"] = opts.sessionId;
+  if (opts.requestId) h["x-request"] = opts.requestId;
+  return h;
+}
 
 export async function sendMessage(opts: SendOptions): Promise<SendResult> {
   const res = await fetch(`${opts.url}/message/send`, {
@@ -16,6 +25,7 @@ export async function sendMessage(opts: SendOptions): Promise<SendResult> {
       "content-type": "application/json",
       "authorization": `Bearer ${opts.token}`,
       "x-depth": String(opts.depth),
+      ...corrHeaders(opts),
     },
     body: JSON.stringify({ message: opts.message }),
   });
@@ -42,6 +52,7 @@ export async function* streamMessage(opts: SendOptions): AsyncGenerator<StreamEv
       "authorization": `Bearer ${opts.token}`,
       "x-depth": String(opts.depth),
       "accept": "text/event-stream",
+      ...corrHeaders(opts),
     },
     body: JSON.stringify({ message: opts.message }),
   });
