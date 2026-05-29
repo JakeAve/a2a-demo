@@ -249,7 +249,13 @@ export async function runOrchestrator(
     signalFired = true;
     ctx.shutdown().then(() => Deno.exit(0));
   });
-  await runRepl({ agents: ctx.agents, bearerToken: ctx.bearerToken, emit: ctx.emit });
+  await runRepl({
+    agents: ctx.agents,
+    bearerToken: ctx.bearerToken,
+    emit: ctx.emit,
+    roomBrokerUrl: ctx.roomBrokerUrl,
+    humanName: cfg.humanName,
+  });
   if (!signalFired) {
     await ctx.shutdown();
     Deno.exit(0);
