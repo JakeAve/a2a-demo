@@ -174,6 +174,8 @@ claude mcp add a2a -- deno run -A --unstable-kv --env-file=.env \
   /abs/path/to/a2a/src/mcp.ts --agents="coordinator,scout,analyst"
 ```
 
+Replace `/abs/path/to/a2a` with this repo's absolute path.
+
 The client sees the raw A2A surface as MCP tools: `list_agents`,
 `list_my_threads`, `delegate_start`, `delegate_continue`, `reset_thread`, and
 (when an orchestrator-backed spawn closure is present, which it always is here)

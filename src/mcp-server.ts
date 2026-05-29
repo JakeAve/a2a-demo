@@ -93,6 +93,13 @@ export async function runMcpServer(ctx: OrchestratorContext): Promise<void> {
   // the gap and leave this promise unresolved.
   const closed = new Promise<void>((resolve) => { server.onclose = () => resolve(); });
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  // If connect() throws, propagate immediately rather than awaiting `closed`
+  // (which would never resolve, hanging the server).
+  try {
+    await server.connect(transport);
+  } catch (e) {
+    server.onclose = undefined;
+    throw e;
+  }
   await closed;
 }
