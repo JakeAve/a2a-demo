@@ -1,5 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
-import { callMcpTool, mcpToolList } from "../../src/mcp-server.ts";
+import { buildMcpServer, callMcpTool, mcpToolList } from "../../src/mcp-server.ts";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { ToolDeps } from "../../src/agent/tools.ts";
 import { RegistryClient } from "../../src/registry/client.ts";
 import type { EmitEvent } from "../../src/observability/events.ts";
@@ -73,4 +75,28 @@ Deno.test("callMcpTool flags an error result with isError", async () => {
   await reg.stop();
   assertEquals(res.isError, true);
   assert(res.content[0].text.includes("unknown tool"));
+});
+
+Deno.test("e2e: an MCP client lists tools and calls list_agents through the server", async () => {
+  const reg = emptyRegistry();
+  const deps = depsFor(reg.client, []);
+
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const server = buildMcpServer(deps, "ctx-e2e", "sess-e2e");
+  await server.connect(serverTransport);
+
+  const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+  await client.connect(clientTransport);
+
+  const listed = await client.listTools();
+  const names = listed.tools.map((t: { name: string }) => t.name);
+  assert(names.includes("delegate_start"));
+  assert(names.includes("list_agents"));
+
+  const result = await client.callTool({ name: "list_agents", arguments: {} });
+  assertEquals((result.content as { type: string; text: string }[])[0], { type: "text", text: "[]" });
+
+  await client.close();
+  await server.close();
+  await reg.stop();
 });
