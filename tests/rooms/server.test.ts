@@ -89,3 +89,22 @@ Deno.test("post past maxTurns is rejected and emits room.capped", async () => {
   assertEquals(events.some((e) => e.type === "room.capped"), true);
   await broker.shutdown(); kv.close();
 });
+
+Deno.test("creator can post in a room it created without being listed in members", async () => {
+  const { kv, broker, base, h, pushed } = await harness();
+  // Alvy creates a room listing only Bex (the "members besides you" convention).
+  const created = await (await fetch(`${base}/rooms`, {
+    method: "POST", headers: h,
+    body: JSON.stringify({ title: "t", members: ["Bex"], createdBy: "Alvy", sessionId: "s1" }),
+  })).json();
+  const roomId = created.roomId;
+  // Alvy posts — must NOT be rejected 403 (Alvy was auto-added as creator).
+  const res = await fetch(`${base}/rooms/${roomId}/post`, {
+    method: "POST", headers: h, body: JSON.stringify({ from: "Alvy", text: "opening", to: ["Bex"] }),
+  });
+  assertEquals(res.status, 200);
+  const json = await res.json();
+  assertEquals(json.seq, 0);
+  assertEquals(pushed.at(-1)?.addressedBy, "Alvy"); // delivery went to Bex
+  await broker.shutdown(); kv.close();
+});

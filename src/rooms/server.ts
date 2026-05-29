@@ -98,6 +98,12 @@ export function startRoomBroker(cfg: RoomBrokerConfig): Promise<RoomBrokerHandle
     for (const hm of (body.humanMembers ?? []) as Array<{ name: string; inboxUrl: string }>) {
       members.push({ name: hm.name, inboxUrl: hm.inboxUrl, kind: "human" });
     }
+    const creator = String(body.createdBy ?? "?");
+    if (creator !== "?" && !members.some((m) => m.name === creator)) {
+      const url = await cfg.resolveInbox(creator);
+      if (url) members.push({ name: creator, inboxUrl: url, kind: "agent" });
+      else unresolved.push(creator);
+    }
     const room = await store.createRoom({
       title: String(body.title ?? "room"), createdBy: String(body.createdBy ?? "?"),
       sessionId: String(body.sessionId ?? ""), maxTurns: Number(body.maxTurns ?? cfg.defaultMaxTurns),
