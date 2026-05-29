@@ -30,6 +30,9 @@ export type ClaudeDeps = {
   emit?: Emitter;
   // When true, expose Anthropic's server-side web_search tool to this agent.
   webSearch?: boolean;
+  // Test seam: inject a stub Anthropic client. Production leaves this unset and
+  // a real client is constructed from apiKey.
+  client?: Anthropic;
 };
 
 // Anthropic's server-side web search tool. Claude runs the search itself and
@@ -61,7 +64,7 @@ function toAnthropic(
 }
 
 export function makeClaudeHandlers(deps: ClaudeDeps) {
-  const client = new Anthropic({ apiKey: deps.apiKey });
+  const client = deps.client ?? new Anthropic({ apiKey: deps.apiKey });
   const toolDeps: ToolDeps = {
     store: deps.store,
     threads: deps.threads,
@@ -84,10 +87,17 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
     let finalText = "";
     const messages = toAnthropic(await deps.store.get(contextId));
 
+    // Agentic turns can carry large tool-call arguments — e.g. a researcher
+    // forwarding compiled web findings to a peer via delegate_start. A small
+    // budget truncates mid-tool_use (stop_reason "max_tokens") and the call is
+    // silently lost. Start generous and escalate on truncation (see below).
+    let maxTokens = 4096;
+    const MAX_TOKENS_CAP = 16384;
+
     for (let iter = 0; iter < 8; iter++) {
       const resp = await client.messages.create({
         model: deps.model,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system: deps.systemPrompt + systemSuffix,
         tools,
         messages,
@@ -102,8 +112,6 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
         name: string;
         input: Record<string, unknown>;
       }>;
-
-      if (textBlocks.length) finalText = textBlocks.join("\n");
 
       // Surface Anthropic's server-side web_search calls as tool.call events so
       // they render as round arrows in the monitor, just like client tools.
@@ -129,6 +137,18 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
         messages.push({ role: "assistant", content: resp.content as never });
         continue;
       }
+
+      // Truncated mid-generation (commonly a long tool-call argument, e.g. a
+      // researcher forwarding compiled findings via delegate_start). The
+      // `messages` array is still valid — we haven't appended this partial
+      // turn — so retry it verbatim with a larger budget instead of silently
+      // dropping the (possibly incomplete) tool call. Escalates up to a cap.
+      if (resp.stop_reason === "max_tokens" && maxTokens < MAX_TOKENS_CAP) {
+        maxTokens = Math.min(maxTokens * 2, MAX_TOKENS_CAP);
+        continue;
+      }
+
+      if (textBlocks.length) finalText = textBlocks.join("\n");
 
       if (resp.stop_reason !== "tool_use" || toolBlocks.length === 0) break;
 

@@ -3,7 +3,7 @@
   "backend": "claude",
   "model": "claude-sonnet-4-6",
   "description": "Coordinator backed by Claude Sonnet",
-  "systemPrompt": "You are a coordinator. Answer directly by default. Delegate to a peer only when it clearly helps — a peer has a better-suited capability or a cheaper/faster model, or the work genuinely splits into independent parts. Stay concise.",
+  "systemPrompt": "You are a coordinator. For a simple request, answer directly. Delegate when a peer is better suited — a better capability or a cheaper/faster model — or when the work splits into independent parts. When the user names a peer or asks you to route work to one (e.g. \"have the researcher do X\", \"forward this to the summarizer\"), delegate it as asked rather than answering in their place. Stay concise.",
   "skills": [
     { "id": "coordinate", "name": "Coordinate", "description": "Plans and delegates complex tasks" }
   ],

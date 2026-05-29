@@ -156,13 +156,19 @@ const WEB_SEARCH_TOOL: BaseTool = {
 
 export const DELEGATION_SUFFIX = `
 
-You can answer most requests yourself — do that by default. Delegation has real
-cost (latency, tokens, and peers may delegate further), so only delegate when it
-clearly pays off: the work splits into genuinely independent parts worth running
-in parallel, a peer has a capability or cheaper/faster model better suited to it,
-or the task is too large to do well in one turn. Don't break a question into
-sub-questions you could just answer. Keep it to a few delegations, not a swarm,
-and don't hand work to a peer that would only delegate it again.
+Delegation has real cost (latency, tokens, and peers may delegate further), so
+match it to the task. When you can answer something well yourself, just answer.
+Delegate when it clearly pays off: the work splits into genuinely independent
+parts worth running in parallel, a peer has a capability or cheaper/faster model
+better suited to it, or the task is too large to do well in one turn. Keep it to
+a few purposeful delegations, not a reflexive swarm, and don't hand work to a
+peer that would only delegate it again.
+
+If you are explicitly asked to delegate, to route work to a named peer, or to
+hand a result onward (e.g. "have the researcher do X", "forward this to the
+summarizer"), then do it — actually call the delegation tool. An explicit
+routing request overrides the restraint above; saying you'll delegate without
+calling the tool is a failure, not an answer.
 
 Delegation tools available to you:
 - list_agents: discover which peer agents exist.
@@ -236,7 +242,32 @@ async function delegate(
   return res.text;
 }
 
+// Run a tool and emit a tool.call carrying BOTH its args and its result, so the
+// monitor's inspector can show what came back without any per-tool wiring. The
+// emit lands after the tool returns (errors are caught and returned as an
+// { error } JSON, so failures surface too). delegate/spawn tools are excluded:
+// they emit their own richer events (cross-lane arrows / spawn) inside dispatch.
 export async function runTool(
+  deps: ToolDeps,
+  name: string,
+  args: Record<string, unknown>,
+  depth: number,
+  parentContextId: string,
+  ids: EmitIds = { sessionId: "", requestId: "" },
+): Promise<string> {
+  const result = await dispatchTool(deps, name, args, depth, parentContextId, ids);
+  if (name !== "delegate_start" && name !== "delegate_continue" && name !== "spawn_agent") {
+    const emit = deps.emit ?? (() => Promise.resolve());
+    void emit({
+      sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
+      depth, ts: now(), type: "tool.call",
+      data: { tool: name, args: truncate(JSON.stringify(args), 120), result: truncate(result, 4000) },
+    });
+  }
+  return result;
+}
+
+async function dispatchTool(
   deps: ToolDeps,
   name: string,
   args: Record<string, unknown>,
@@ -250,14 +281,6 @@ export async function runTool(
       sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
       depth, ts: now(), type, data, threadId,
     });
-
-  // Auto-emit a tool.call for every tool EXCEPT the delegation/spawn tools,
-  // which emit their own richer events (cross-lane arrows / spawn) below. This
-  // is the single client-tool dispatch point, so any new tool is visible in the
-  // monitor by default — no per-tool wiring required.
-  if (name !== "delegate_start" && name !== "delegate_continue" && name !== "spawn_agent") {
-    ev("tool.call", { tool: name, args: truncate(JSON.stringify(args), 120) });
-  }
 
   try {
     if (name === "list_agents") {
@@ -296,14 +319,14 @@ export async function runTool(
       const card = await deps.registry.get(target);
       if (!card) return JSON.stringify({ error: `unknown agent ${target}` });
       const meta = await deps.threads.start(parentContextId, target, title);
-      ev("delegate.start", { peer: target, title, prompt: truncate(prompt, 200) }, meta.threadId);
+      ev("delegate.start", { peer: target, title, prompt: truncate(prompt, 4000) }, meta.threadId);
       const startedTs = now();
       // If delegate() throws, the outer catch returns an error JSON and
       // delegate.return is not emitted — the monitor must treat a dangling
       // delegate.start as an implicitly-failed leg (v1 limitation).
       const text = await delegate(deps, meta.threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(meta.threadId);
-      ev("delegate.return", { peer: target, ok: true, durationMs: now() - startedTs, preview: truncate(text, 200) }, meta.threadId);
+      ev("delegate.return", { peer: target, ok: true, durationMs: now() - startedTs, preview: truncate(text, 4000) }, meta.threadId);
       return JSON.stringify({ threadId: meta.threadId, text });
     }
 
@@ -319,12 +342,12 @@ export async function runTool(
       }
       const card = await deps.registry.get(meta.peer);
       if (!card) return JSON.stringify({ error: `peer ${meta.peer} is gone` });
-      ev("delegate.continue", { peer: meta.peer, turn: meta.turnCount + 1, prompt: truncate(prompt, 200) }, threadId);
+      ev("delegate.continue", { peer: meta.peer, turn: meta.turnCount + 1, prompt: truncate(prompt, 4000) }, threadId);
       const startedTs = now();
       // See delegate_start: a throw here leaves a dangling delegate.start (v1).
       const text = await delegate(deps, threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(threadId);
-      ev("delegate.return", { peer: meta.peer, ok: true, durationMs: now() - startedTs, preview: truncate(text, 200) }, threadId);
+      ev("delegate.return", { peer: meta.peer, ok: true, durationMs: now() - startedTs, preview: truncate(text, 4000) }, threadId);
       return JSON.stringify({ threadId, text });
     }
 
