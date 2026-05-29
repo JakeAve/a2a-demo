@@ -12,6 +12,10 @@ import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 import { createEmitter } from "./observability/emit.ts";
 import type { Emitter } from "./observability/emit.ts";
+import { startRoomBroker, type RoomBrokerHandle } from "./rooms/server.ts";
+import { RoomBrokerClient } from "./rooms/client.ts";
+import type { RoomTurnState } from "./rooms/types.ts";
+import { makeRoomTurnProcessor } from "./agent/room-turn.ts";
 
 // Wait until the registry has an entry for `name`, or give up.
 async function waitForRegistration(
@@ -37,6 +41,7 @@ export type OrchestratorContext = {
   emit: Emitter;
   bearerToken: string;
   registryPort: number;
+  roomBrokerUrl: string;
   /** Idempotent cleanup: deregister + kill children + shut down agents/registry + close KV. Does NOT exit the process. */
   shutdown: () => Promise<void>;
 };
@@ -65,6 +70,20 @@ export async function setupOrchestrator(
   const store = new ContextStore(kv);
   const threads = new ThreadStore(kv);
   const sessions = new SessionStore(kv);
+
+  const roomKv = await Deno.openKv();
+  const roomBroker: RoomBrokerHandle = await startRoomBroker({
+    kv: roomKv,
+    port: cfg.roomBrokerPort,
+    token: cfg.bearerToken,
+    resolveInbox: async (name) => (await registryClient.get(name))?.url ?? null,
+    emit,
+    agentDeadlineMs: cfg.agentDeadlineMs,
+    humanDeadlineMs: cfg.humanDeadlineMs,
+    defaultMaxTurns: cfg.roomMaxTurns,
+  });
+  const roomBrokerUrl = `http://localhost:${roomBroker.port}`;
+  console.log(`[room-broker] ${roomBrokerUrl}`);
 
   console.log(`[registry]   localhost:${registry.port}`);
 
@@ -103,6 +122,7 @@ export async function setupOrchestrator(
       `--role=${role}`,
       `--name=${name}`,
       `--registry=http://localhost:${registry.port}`,
+      `--broker=${roomBrokerUrl}`,
     ];
     if (modelOverride) args.push(`--model=${modelOverride}`);
     try {
@@ -139,6 +159,9 @@ export async function setupOrchestrator(
         security: [{ bearer: [] }],
       };
 
+      const roomTurn: RoomTurnState = { active: null };
+      const rooms = new RoomBrokerClient(roomBrokerUrl, cfg.bearerToken);
+
       const handlers = await buildHandlers({
         model: spec.model,
         preset: spec.preset,
@@ -151,6 +174,16 @@ export async function setupOrchestrator(
         spawnAgent,
         availableRoles,
         emit,
+        rooms,
+        roomTurn,
+      });
+
+      const onInbox = makeRoomTurnProcessor({
+        selfName: spec.name,
+        handler: handlers.handler,
+        rooms,
+        roomTurn,
+        store,
       });
 
       const handle = await startAgent({
@@ -160,6 +193,7 @@ export async function setupOrchestrator(
         streamHandler: handlers.streamHandler,
         emit,
         maxDepth: resolveMaxDepth,
+        onInbox,
       });
       await registryClient.register(handle.card);
       handles.push(handle);
@@ -184,6 +218,8 @@ export async function setupOrchestrator(
       try { await h.shutdown(); } catch { /* ignore */ }
     }
     try { await registry.shutdown(); } catch { /* ignore */ }
+    try { await roomBroker.shutdown(); } catch { /* ignore */ }
+    roomKv.close();
     kv.close();
   };
 
@@ -197,6 +233,7 @@ export async function setupOrchestrator(
     emit,
     bearerToken: cfg.bearerToken,
     registryPort: registry.port,
+    roomBrokerUrl,
     shutdown,
   };
 }
