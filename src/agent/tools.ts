@@ -266,6 +266,9 @@ export async function runTool(
       const meta = await deps.threads.start(parentContextId, target, title);
       ev("delegate.start", { peer: target, title, prompt: truncate(prompt, 200) }, meta.threadId);
       const startedTs = now();
+      // If delegate() throws, the outer catch returns an error JSON and
+      // delegate.return is not emitted — the monitor must treat a dangling
+      // delegate.start as an implicitly-failed leg (v1 limitation).
       const text = await delegate(deps, meta.threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(meta.threadId);
       ev("delegate.return", { peer: target, ok: true, durationMs: now() - startedTs, preview: truncate(text, 200) }, meta.threadId);
@@ -286,6 +289,7 @@ export async function runTool(
       if (!card) return JSON.stringify({ error: `peer ${meta.peer} is gone` });
       ev("delegate.continue", { peer: meta.peer, turn: meta.turnCount + 1, prompt: truncate(prompt, 200) }, threadId);
       const startedTs = now();
+      // See delegate_start: a throw here leaves a dangling delegate.start (v1).
       const text = await delegate(deps, threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(threadId);
       ev("delegate.return", { peer: meta.peer, ok: true, durationMs: now() - startedTs, preview: truncate(text, 200) }, threadId);
