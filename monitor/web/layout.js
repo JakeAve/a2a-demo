@@ -18,7 +18,9 @@ export function computeLayout(events) {
   });
 
   const arrows = [];
-  let y = 70;
+  // Lane names live in a separate sticky header bar now, so the arrow body
+  // starts near the top of its own SVG rather than below an in-canvas header.
+  let y = 28;
   const rowH = 46;
   for (const e of events) {
     const row = { y, seq: e.seq, event: e };

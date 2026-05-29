@@ -4,40 +4,119 @@ import { computeLayout } from "/layout.js";
 const COLOR = { request: "var(--repl)", delegate: "var(--del)", continue: "var(--del)",
   return: "var(--ret)", final: "var(--ret)", self: "var(--del)", error: "#e05555" };
 
+const HEAD = 44; // height of the sticky lane-name bar
+
+// Escape for safe inlining into SVG/HTML text nodes.
+const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+
+// Collapse whitespace and clip to a character budget, appending an ellipsis.
+const clip = (s, n) => {
+  s = String(s ?? "").replace(/\s+/g, " ").trim();
+  return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s;
+};
+
+// The most useful one-line preview for each event kind, so the message is
+// readable on the wire without clicking through to the detail panel.
+function preview(e) {
+  const d = e.data ?? {};
+  switch (e.type) {
+    case "request.started": return d.prompt ?? d.target ?? "";
+    case "delegate.start": return d.prompt ?? d.title ?? "";
+    case "delegate.continue": return d.prompt ?? "";
+    case "delegate.return": return d.preview ?? (d.ok === false ? "failed" : "returned");
+    case "message.completed": return d.text ?? "";
+    case "tool.call": return d.tool ?? "";
+    case "spawn": return d.name ?? d.role ?? "";
+    case "error": return d.message ?? "error";
+    default: return e.type;
+  }
+}
+
 export async function renderSwimlane(view, crumb, sessionId) {
   crumb.innerHTML = `/ <a href="#/">sessions</a> / ${sessionId.slice(0, 8)}`;
   const data = await (await fetch(`/api/sessions/${sessionId}`)).json();
   let events = data.events;
+  // Collapse state for the inspector lives here so it survives the full
+  // re-render that every redraw (selection, live SSE event) triggers.
+  let collapsed = false;
 
   const draw = (selectedSeq) => {
     const { lanes, laneX, arrows, height } = computeLayout(events);
     const width = 90 + lanes.length * 200;
-    const heads = lanes.map((l) =>
-      `<text x="${l.x}" y="24" text-anchor="middle" class="lane-head">${l.agent}</text>
-       <line x1="${l.x}" y1="36" x2="${l.x}" y2="${height}" stroke="#fff2" stroke-dasharray="3 5"/>`).join("");
+    const heads =
+      `<rect x="0" y="0" width="${width}" height="${HEAD}" fill="var(--bg)"/>` +
+      lanes.map((l) =>
+        `<text x="${l.x}" y="27" text-anchor="middle" class="lane-head">${esc(l.agent)}</text>`).join("") +
+      `<line x1="0" y1="${HEAD - 0.5}" x2="${width}" y2="${HEAD - 0.5}" stroke="var(--line)"/>`;
+    const guides = lanes.map((l) =>
+      `<line x1="${l.x}" y1="0" x2="${l.x}" y2="${height}" stroke="#fff2" stroke-dasharray="3 5"/>`).join("");
     const body = arrows.map((a) => {
       const x1 = laneX[a.from], x2 = laneX[a.to];
       const color = COLOR[a.kind] ?? "var(--repl)";
       const dash = (a.kind === "return" || a.kind === "final") ? `stroke-dasharray="5 4"` : "";
-      const sel = a.seq === selectedSeq ? `stroke-width="3.5"` : `stroke-width="2"`;
+      const on = a.seq === selectedSeq;
+      const sel = on ? `stroke-width="3.5"` : `stroke-width="2"`;
+      const cls = on ? "msg sel" : "msg";
       if (a.from === a.to) {
-        return `<path d="M${x1},${a.y} q44,-6 44,8 q0,15 -44,8" fill="none" stroke="${color}" stroke-width="1.6" data-seq="${a.seq}"/>
-                <text x="${x1 + 52}" y="${a.y + 4}">· ${a.event.data.tool ?? a.event.type}</text>`;
+        // Self-loop (tool call / spawn / error): a small lobe with its label.
+        const d = a.event.data ?? {};
+        const label = clip(
+          a.event.type === "tool.call" ? (d.tool ?? "tool")
+            : a.event.type === "spawn" ? `spawn ${d.name ?? d.role ?? ""}`.trim()
+            : a.event.type === "error" ? `error: ${d.message ?? ""}`
+            : a.event.type,
+          28);
+        return `<path d="M${x1},${a.y} q44,-6 44,8 q0,15 -44,8" fill="none" stroke="${color}" stroke-width="1.6" data-seq="${a.seq}" style="cursor:pointer"/>
+                <text x="${x1 + 52}" y="${a.y + 4}" class="${cls}" data-seq="${a.seq}" style="cursor:pointer">· ${esc(label)}</text>`;
       }
-      return `<line x1="${x1}" y1="${a.y}" x2="${x2}" y2="${a.y}" stroke="${color}" ${sel} ${dash} data-seq="${a.seq}" style="cursor:pointer"/>`;
+      // Inter-lane message: line + arrowhead + an inline, ellipsized preview
+      // centered above the wire so its content is legible at a glance.
+      const dir = x2 > x1 ? 1 : -1;
+      const head = `${x2},${a.y} ${x2 - dir * 7},${a.y - 4} ${x2 - dir * 7},${a.y + 4}`;
+      const budget = Math.max(6, Math.floor(Math.abs(x2 - x1) / 6.6) - 4);
+      const label = esc(clip(preview(a.event), budget));
+      return `<g data-seq="${a.seq}" style="cursor:pointer">
+                <line x1="${x1}" y1="${a.y}" x2="${x2 - dir * 6}" y2="${a.y}" stroke="${color}" ${sel} ${dash}/>
+                <polygon points="${head}" fill="${color}"/>
+                <text x="${(x1 + x2) / 2}" y="${a.y - 5}" text-anchor="middle" class="${cls}">${label}</text>
+              </g>`;
     }).join("");
     view.innerHTML =
-      `<div class="tabs" id="tabs"></div>
-       <svg width="${width}" height="${height}" id="canvas">${heads}${body}</svg>
-       <div class="detail" id="detail"><span class="mut">click an arrow to inspect</span></div>`;
+      `<div class="swim">
+         <div class="lane-scroll">
+           <div class="lane-canvas" style="width:${width}px">
+             <svg class="lane-headers" width="${width}" height="${HEAD}">${heads}</svg>
+             <svg class="lane-body" width="${width}" height="${height}">${guides}${body}</svg>
+           </div>
+         </div>
+         <div class="detail${collapsed ? " collapsed" : ""}" id="detail">
+           <div class="detail-head">
+             <span class="mut">message inspector</span>
+             <button type="button" class="collapse-btn" id="collapse-btn"
+               aria-expanded="${!collapsed}" title="${collapsed ? "Expand" : "Collapse"} inspector">${collapsed ? "▴" : "▾"}</button>
+           </div>
+           <div class="detail-body" id="detail-body"><span class="mut">click a message to inspect</span></div>
+         </div>
+       </div>`;
 
     view.querySelectorAll("[data-seq]").forEach((el) => {
-      el.addEventListener("click", () => draw(Number(el.getAttribute("data-seq"))));
+      // Selecting a message always reveals the inspector, even if collapsed.
+      el.addEventListener("click", () => { collapsed = false; draw(Number(el.getAttribute("data-seq"))); });
+    });
+    // Collapse toggle: flip the closure flag and reflect it on the panel
+    // in place — no full redraw, so the current selection stays put.
+    const btn = document.getElementById("collapse-btn");
+    btn.addEventListener("click", () => {
+      collapsed = !collapsed;
+      document.getElementById("detail").classList.toggle("collapsed", collapsed);
+      btn.textContent = collapsed ? "▴" : "▾";
+      btn.setAttribute("aria-expanded", String(!collapsed));
+      btn.title = `${collapsed ? "Expand" : "Collapse"} inspector`;
     });
     if (selectedSeq != null) {
       const e = events.find((x) => x.seq === selectedSeq);
       if (e) {
-        document.getElementById("detail").innerHTML =
+        document.getElementById("detail-body").innerHTML =
           `<strong>${e.agent} · ${e.type}</strong>
            <div class="mut">seq ${e.seq} · depth ${e.depth}${e.threadId ? " · thread " + e.threadId : ""}</div>
            ${Object.entries(e.data).map(([k, v]) =>
