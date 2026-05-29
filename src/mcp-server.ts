@@ -89,9 +89,10 @@ export async function runMcpServer(ctx: OrchestratorContext): Promise<void> {
   const deps = mcpToolDeps(ctx);
   const contextId = crypto.randomUUID(); // one session/thread namespace per server lifetime
   const server = buildMcpServer(deps, contextId, contextId);
+  // Assign onclose BEFORE connect so a fast client disconnect can't slip through
+  // the gap and leave this promise unresolved.
+  const closed = new Promise<void>((resolve) => { server.onclose = () => resolve(); });
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  await new Promise<void>((resolve) => {
-    server.onclose = () => resolve();
-  });
+  await closed;
 }
