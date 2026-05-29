@@ -20,12 +20,14 @@ Deno.test("emitted events for a delegation correlate under one session", async (
   await emit({ ...base, agent: "coordinator", depth: 0, ts: 5, type: "delegate.return", data: { peer: "scout", ok: true }, threadId: "t1" });
   await emit({ ...base, agent: "coordinator", depth: 0, ts: 6, type: "message.completed", data: { text: "final" } });
 
-  // Allow fire-and-forget POSTs to land.
-  // Bumped from 300ms → 600ms: the 6 concurrent fire-and-forget POSTs can
-  // race under load and the shorter delay proved flaky.
-  await new Promise((r) => setTimeout(r, 600));
-
-  const detail = await (await fetch(`${mon.url}/api/sessions/${sessionId}`)).json();
+  // Emits are fire-and-forget POSTs; poll until all 6 have landed (or time out)
+  // rather than sleeping a fixed amount — robust under variable CI load.
+  let detail;
+  for (let i = 0; i < 50; i++) {
+    detail = await (await fetch(`${mon.url}/api/sessions/${sessionId}`)).json();
+    if (detail.events.length >= 6) break;
+    await new Promise((r) => setTimeout(r, 20));
+  }
   assertEquals(detail.events.length, 6);
   assertEquals(detail.summary.agents.sort(), ["REPL", "coordinator", "scout"]);
   // seq is monotonic and dense.

@@ -33,9 +33,10 @@ export class MonitorStore {
     return next;
   }
 
-  // Serialised work for a single ingest call (must not throw before it sets
-  // nextSeq — if it does, the queue stays broken for the session, which is
-  // acceptable: the whole request failed anyway).
+  // Serialised work for a single ingest call. If it throws AFTER advancing
+  // #nextSeq (e.g. a KV write fails), that seq slot is left as a gap and the
+  // next ingest continues at seq+1 — acceptable, since the whole request
+  // failed. The per-session queue still survives the throw (see ingest()).
   async #doIngest(input: EmitEvent | A2AEvent): Promise<A2AEvent> {
     const seq = await this.#seqFor(input.sessionId);
     const event = parseEvent({ ...input, seq });
