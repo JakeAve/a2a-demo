@@ -54,6 +54,27 @@ Refactor target: a single `buildAgentCard(name, preset)` helper (in
 role name + RolePreset. Both call sites become one-liners. Reduces the
 risk of the two diverging.
 
+## REPL: signal direct-send vs room-post mode
+
+**Priority: high (UX trap, hit on the first Plan-2 smoke test).** When no
+room is focused, typing `@agent <prompt>` silently does a 1:1 direct send
+(the intended escape) — but there is no cue, so it's easy to believe you
+posted to a room when you didn't. Observed live: `@analyst …` typed before
+`:room new` went out as a direct send and created no room, with no signal.
+
+Fix: echo a one-line cue on the direct-send path, e.g.
+`(direct send — no room focused; use :room new / :room join to start one)`,
+and consider showing the focused room in the prompt itself (e.g.
+`[hotdog debate] > ` vs the bare `> `).
+
+Lives in `src/repl.ts`: `classifyLine` already returns `{kind:"direct"}`;
+the cue goes in the `runRepl` dispatch for that branch, and the prompt
+string is the `PROMPT`/`write(...)` calls. The design spec
+(`docs/superpowers/specs/2026-05-29-agent-rooms-design.md`) explicitly
+flags the focused-room input model as the expected iteration point.
+
+**Rough scope:** ~10 lines, REPL-only — no broker or protocol change.
+
 ## Other ideas captured during development
 
 - **Reset / forget tool for sonnet**: `forget(threadId)` or just deeper
@@ -70,3 +91,6 @@ risk of the two diverging.
 - **Structured artifacts**: A2A spec supports `parts: [{type:"data",
   data: ...}]` and `{type:"file"}` — we only use text parts. Worth
   exposing if peers need to exchange structured JSON or files.
+- **REPL bare `@name` post** (minor): typing just `@member` with no text
+  while a room is focused posts the literal `"@name"` as the message body
+  instead of erroring. Guard in `classifyLine` (`src/repl.ts`).
