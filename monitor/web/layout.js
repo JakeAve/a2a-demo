@@ -1,10 +1,11 @@
 // Pure function: ordered events -> { lanes, arrows }. No DOM, so it is unit
-// testable under Deno. Lanes are ordered by first appearance, REPL first.
+// testable under Deno. Lanes are ordered by first appearance, so the driver
+// (REPL or mcp — whichever emits the first event) leads. We don't seed a REPL
+// lane: MCP-driven sessions have no REPL events and shouldn't show an empty one.
 export function computeLayout(events) {
   const order = [];
   const seen = new Set();
   const see = (a) => { if (a && !seen.has(a)) { seen.add(a); order.push(a); } };
-  see("REPL");
   for (const e of events) {
     see(e.agent);
     if (e.data && typeof e.data.peer === "string") see(e.data.peer);

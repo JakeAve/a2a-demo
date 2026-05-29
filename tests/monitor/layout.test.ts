@@ -29,3 +29,18 @@ Deno.test("computeLayout draws depth-0 message.completed as a return to REPL", (
   assertEquals(fin.from, "coordinator");
   assertEquals(fin.to, "REPL");
 });
+
+// An MCP-driven session has no REPL events — its driver self-name is "mcp".
+const mcpEvents = [
+  { sessionId: "s2", requestId: "r1", seq: 0, ts: 1, agent: "mcp", depth: 0, type: "tool.call", data: { tool: "list_agents" } },
+  { sessionId: "s2", requestId: "r2", seq: 1, ts: 2, agent: "mcp", depth: 0, type: "delegate.start", data: { peer: "scout" }, threadId: "t1" },
+  { sessionId: "s2", requestId: "r2", seq: 2, ts: 3, agent: "mcp", depth: 0, type: "delegate.return", data: { peer: "scout" }, threadId: "t1" },
+];
+
+Deno.test("computeLayout omits the REPL lane for an MCP-driven session", () => {
+  const { lanes } = computeLayout(mcpEvents);
+  const names = lanes.map((l) => l.agent);
+  assertEquals(names.includes("REPL"), false);
+  assertEquals(names[0], "mcp"); // the driver leads the lanes
+  assertEquals(names.includes("scout"), true);
+});
