@@ -11,6 +11,7 @@ import { buildHandlers } from "./agent/handlers.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 import { createEmitter } from "./observability/emit.ts";
+import type { Emitter } from "./observability/emit.ts";
 
 // Wait until the registry has an entry for `name`, or give up.
 async function waitForRegistration(
@@ -33,7 +34,7 @@ export type OrchestratorContext = {
   agents: Map<string, AgentCard>;
   spawnAgent: (role: string, name?: string, model?: string) => Promise<SpawnResult>;
   availableRoles: () => Array<{ name: string; description: string; backend: string; defaultModel: string }>;
-  emit: ReturnType<typeof createEmitter>;
+  emit: Emitter;
   bearerToken: string;
   registryPort: number;
   /** Idempotent cleanup: deregister + kill children + shut down agents/registry + close KV. Does NOT exit the process. */
@@ -56,6 +57,9 @@ export async function setupOrchestrator(
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
   const kv = await Deno.openKv();
   const emit = createEmitter(cfg.monitorUrl || undefined, cfg.bearerToken);
+  // Max delegation depth: a fixed A2A_MAX_DEPTH if set, else pegged to the
+  // current registered-agent count (floored at 2 so it never tightens below
+  // the original REPL→A→B budget). More agents → deeper fan-out allowed.
   const resolveMaxDepth = async () =>
     cfg.maxDepth > 0 ? cfg.maxDepth : Math.max(2, (await registryClient.list()).length);
   const store = new ContextStore(kv);
@@ -203,8 +207,14 @@ export async function runOrchestrator(
   roles: Record<string, RolePreset>,
 ): Promise<void> {
   const ctx = await setupOrchestrator(cfg, specs, roles);
-  Deno.addSignalListener("SIGINT", () => { ctx.shutdown().then(() => Deno.exit(0)); });
+  let signalFired = false;
+  Deno.addSignalListener("SIGINT", () => {
+    signalFired = true;
+    ctx.shutdown().then(() => Deno.exit(0));
+  });
   await runRepl({ agents: ctx.agents, bearerToken: ctx.bearerToken, emit: ctx.emit });
-  await ctx.shutdown();
-  Deno.exit(0);
+  if (!signalFired) {
+    await ctx.shutdown();
+    Deno.exit(0);
+  }
 }
