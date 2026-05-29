@@ -39,6 +39,10 @@
     "toolCapable": {
       "type": "boolean",
       "description": "Set to true if the model supports function calling. Claude is always true; Ollama models vary."
+    },
+    "webSearch": {
+      "type": "boolean",
+      "description": "Claude backend only: expose Anthropic's server-side web_search tool to this agent."
     }
   }
 }

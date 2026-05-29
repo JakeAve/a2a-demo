@@ -38,7 +38,7 @@ export function buildHandlers(d: BuildHandlersDeps): Handlers {
       model: d.model, systemPrompt: preset.systemPrompt, apiKey: cfg.anthropicApiKey,
       store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
       selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
-      emit: d.emit,
+      emit: d.emit, webSearch: preset.webSearch,
     });
   }
   if (preset.backend === "claude-code") {

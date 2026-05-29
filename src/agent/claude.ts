@@ -27,7 +27,22 @@ export type ClaudeDeps = {
   spawnAgent?: ToolDeps["spawnAgent"];
   availableRoles?: ToolDeps["availableRoles"];
   emit?: Emitter;
+  // When true, expose Anthropic's server-side web_search tool to this agent.
+  webSearch?: boolean;
 };
+
+// Anthropic's server-side web search tool. Claude runs the search itself and
+// returns the results inline (as server_tool_use / web_search_tool_result
+// blocks we don't treat as client tool calls). Cast because the pinned SDK
+// (0.30) predates the server-tool types; the API accepts it at runtime.
+const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 5 };
+
+// Build the Anthropic tools array: the A2A client tools, plus web_search when
+// enabled. Exported for testing.
+export function buildAnthropicTools(toolDeps: ToolDeps, webSearch?: boolean): Anthropic.Tool[] {
+  const tools = toAnthropicTools(toolDeps) as unknown as Anthropic.Tool[];
+  return webSearch ? [...tools, WEB_SEARCH_TOOL as unknown as Anthropic.Tool] : tools;
+}
 
 function userText(ctx: AgentHandlerCtx): string {
   return ctx.message.parts
@@ -56,7 +71,7 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
     availableRoles: deps.availableRoles,
     emit: deps.emit,
   };
-  const tools = toAnthropicTools(toolDeps);
+  const tools = buildAnthropicTools(toolDeps, deps.webSearch);
   const systemSuffix = buildSystemSuffix(toolDeps);
 
   async function handler(ctx: AgentHandlerCtx): Promise<{ text: string }> {
@@ -88,6 +103,16 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
       }>;
 
       if (textBlocks.length) finalText = textBlocks.join("\n");
+
+      // A server tool (web_search) ran and Claude needs another turn to finish.
+      // Resend the assistant content unchanged — there are no client
+      // tool_results to add; the search results are already in resp.content.
+      // Cast: the pinned SDK (0.30) predates the "pause_turn" stop reason, but
+      // the API returns it when a server tool needs another turn.
+      if ((resp.stop_reason as string) === "pause_turn") {
+        messages.push({ role: "assistant", content: resp.content as never });
+        continue;
+      }
 
       if (resp.stop_reason !== "tool_use" || toolBlocks.length === 0) break;
 
