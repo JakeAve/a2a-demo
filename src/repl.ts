@@ -5,6 +5,7 @@ import { now } from "./observability/emit.ts";
 import type { InboxDelivery } from "./rooms/types.ts";
 import { Hono } from "hono";
 import { InboxQueue } from "./agent/inbox.ts";
+import { RoomBrokerClient } from "./rooms/client.ts";
 
 // ---- Pure line classification (no I/O, unit-tested) ----
 
@@ -147,77 +148,194 @@ export type ReplDeps = {
   agents: Map<string, AgentCard>; // name → card
   bearerToken: string;
   emit?: Emitter;
+  // Rooms: when a broker URL (or client) is provided, room commands are enabled.
+  roomBrokerUrl?: string;
+  roomsClient?: RoomBrokerClient; // test seam; defaults to one built from roomBrokerUrl
+  humanName?: string; // the human's member name; default "human"
+  // I/O seams (default: real stdin lines / stdout). Tests inject scripted I/O.
+  input?: AsyncIterable<string>;
+  output?: (s: string) => void;
+  inboxPort?: number; // default 0 (dynamic)
 };
 
 const PROMPT = "\n> ";
 
-export async function runRepl(deps: ReplDeps): Promise<void> {
+// Default input: decode stdin chunks into lines (one chunk == one line, as before).
+async function* stdinLines(): AsyncGenerator<string> {
   const decoder = new TextDecoder();
+  for await (const chunk of Deno.stdin.readable) yield decoder.decode(chunk);
+}
+
+export async function runRepl(deps: ReplDeps): Promise<void> {
+  const enc = new TextEncoder();
+  const write = deps.output ?? ((s: string) => { Deno.stdout.writeSync(enc.encode(s)); });
+  const input = deps.input ?? stdinLines();
   const contextId = crypto.randomUUID();
   const sessionId = contextId; // session == driver run
   const emit: Emitter = deps.emit ?? (() => Promise.resolve());
-  Deno.stdout.writeSync(new TextEncoder().encode(PROMPT));
+  const humanName = deps.humanName ?? "human";
+  const rooms = deps.roomsClient ??
+    (deps.roomBrokerUrl ? new RoomBrokerClient(deps.roomBrokerUrl, deps.bearerToken) : undefined);
+  const knownAgents = new Set(deps.agents.keys());
 
-  for await (const chunk of Deno.stdin.readable) {
-    const line = decoder.decode(chunk).trim();
-    if (!line) {
-      Deno.stdout.writeSync(new TextEncoder().encode(PROMPT));
-      continue;
-    }
-    if (line === ":quit" || line === ":q") return;
+  // ---- Room state ----
+  let focusedRoomId: string | null = null;
+  let focusedTitle = "";
+  let focusedMembers = new Set<string>();
+  // Most recent unanswered delivery per room: turnId to thread + who addressed us.
+  const pending = new Map<string, { turnId: string; addressedBy: string }>();
 
-    const match = line.match(/^@(\S+)\s+(.+)$/);
-    if (!match) {
-      console.log(`(use @<agent> <prompt>; known: ${[...deps.agents.keys()].join(", ")})`);
-      Deno.stdout.writeSync(new TextEncoder().encode(PROMPT));
-      continue;
+  let inbox: ReplInboxHandle | null = null;
+  const ensureInbox = (): ReplInboxHandle => {
+    if (!inbox) {
+      inbox = startReplInbox({
+        token: deps.bearerToken,
+        port: deps.inboxPort,
+        onDelivery: (d) => {
+          pending.set(d.roomId, { turnId: d.turnId, addressedBy: d.addressedBy });
+          if (d.roomId === focusedRoomId) {
+            focusedMembers = new Set(d.members);
+            focusedTitle = d.title;
+          }
+          write(`\n${formatDelivery(d)}\n> `); // print then redraw the prompt
+        },
+      });
     }
-    const [, name, prompt] = match;
+    return inbox;
+  };
+
+  const refreshFocused = async (roomId: string) => {
+    const got = await rooms?.get(roomId);
+    if (got) {
+      focusedTitle = got.room.title;
+      focusedMembers = new Set(got.room.members.filter((m) => m.active).map((m) => m.name));
+    }
+  };
+
+  // ---- Direct send to an agent (existing behavior, unchanged) ----
+  const directSend = async (name: string, prompt: string) => {
     const card = deps.agents.get(name);
-    if (!card) {
-      console.log(`unknown agent: ${name}`);
-      Deno.stdout.writeSync(new TextEncoder().encode(PROMPT));
-      continue;
-    }
-
+    if (!card) { write(`unknown agent: ${name}\n`); return; }
     const requestId = crypto.randomUUID();
     void emit({
       sessionId, requestId, agent: "REPL", depth: 0, ts: now(),
       type: "request.started", data: { target: name, prompt },
     });
-    const enc = new TextEncoder();
-    Deno.stdout.writeSync(enc.encode(`[${name}] `));
+    write(`[${name}] `);
     const startedTs = now();
     try {
       for await (const ev of streamMessage({
-        url: card.url,
-        token: deps.bearerToken,
-        depth: 0,
-        sessionId,
-        requestId,
+        url: card.url, token: deps.bearerToken, depth: 0, sessionId, requestId,
         message: {
-          messageId: crypto.randomUUID(),
-          role: "user",
-          parts: [{ type: "text", text: prompt }],
-          contextId,
+          messageId: crypto.randomUUID(), role: "user",
+          parts: [{ type: "text", text: prompt }], contextId,
         },
       })) {
-        if (ev.type === "delta") Deno.stdout.writeSync(enc.encode(ev.text));
+        if (ev.type === "delta") write(ev.text);
         else if (ev.type === "tool") {
           const argsStr = JSON.stringify(ev.args);
           const compact = argsStr.length > 80 ? argsStr.slice(0, 77) + "…" : argsStr;
-          Deno.stdout.writeSync(enc.encode(`\n  · ${ev.name}${compact}\n  `));
-        }
-        else if (ev.type === "error") Deno.stdout.writeSync(enc.encode(`\n[error] ${ev.message}`));
+          write(`\n  · ${ev.name}${compact}\n  `);
+        } else if (ev.type === "error") write(`\n[error] ${ev.message}`);
         else if (ev.type === "done") break;
       }
     } catch (e) {
-      Deno.stdout.writeSync(enc.encode(`\n[error] ${(e as Error).message}`));
+      write(`\n[error] ${(e as Error).message}`);
     }
     void emit({
       sessionId, requestId, agent: "REPL", depth: 0, ts: now(),
       type: "request.completed", data: { durationMs: now() - startedTs },
     });
-    Deno.stdout.writeSync(enc.encode(PROMPT));
+  };
+
+  write(PROMPT);
+
+  for await (const chunk of input) {
+    const cls = classifyLine(chunk, {
+      focusedRoomId, focusedMembers, knownAgents,
+      lastAddressedBy: focusedRoomId ? (pending.get(focusedRoomId)?.addressedBy ?? null) : null,
+    });
+
+    if (cls.kind === "empty") { write(PROMPT); continue; }
+    if (cls.kind === "quit") break;
+    if (cls.kind === "hint") { write(cls.message + "\n"); write(PROMPT); continue; }
+
+    if (cls.kind === "direct") { await directSend(cls.agent, cls.prompt); write(PROMPT); continue; }
+
+    // ---- Room commands (all require a broker) ----
+    if (!rooms) { write("rooms are disabled (no broker)\n"); write(PROMPT); continue; }
+
+    if (cls.kind === "rooms") {
+      const list = await rooms.listByMember(humanName);
+      if (!list.length) write("(no rooms)\n");
+      for (const r of list) {
+        write(`  ${r.roomId}  "${r.title}"  [${r.status}]${r.roomId === focusedRoomId ? " *focused" : ""}\n`);
+      }
+      write(PROMPT); continue;
+    }
+
+    if (cls.kind === "roomNew") {
+      const ib = ensureInbox();
+      try {
+        const res = await rooms.createRoom({
+          title: cls.title, members: cls.members, createdBy: humanName, sessionId,
+          humanMembers: [{ name: humanName, inboxUrl: ib.url }],
+        });
+        focusedRoomId = res.roomId;
+        await refreshFocused(res.roomId);
+        write(`joined room ${res.roomId} "${cls.title}"`);
+        if (res.unresolved.length) write(`  (unresolved: ${res.unresolved.join(", ")})`);
+        write("\n");
+      } catch (e) { write(`[error] ${(e as Error).message}\n`); }
+      write(PROMPT); continue;
+    }
+
+    if (cls.kind === "roomJoin") {
+      const ib = ensureInbox();
+      try {
+        await rooms.join(cls.roomId, { name: humanName, inboxUrl: ib.url });
+        focusedRoomId = cls.roomId;
+        await refreshFocused(cls.roomId);
+        write(`joined room ${cls.roomId} "${focusedTitle}"\n`);
+      } catch (e) { write(`[error] ${(e as Error).message}\n`); }
+      write(PROMPT); continue;
+    }
+
+    if (cls.kind === "roomLeave") {
+      if (!focusedRoomId) { write("not in a room\n"); write(PROMPT); continue; }
+      try { await rooms.leave(focusedRoomId, humanName); } catch { /* ignore */ }
+      write(`left room ${focusedRoomId}\n`);
+      pending.delete(focusedRoomId);
+      focusedRoomId = null; focusedMembers = new Set(); focusedTitle = "";
+      write(PROMPT); continue;
+    }
+
+    if (cls.kind === "roomLog") {
+      if (!focusedRoomId) { write("not in a room\n"); write(PROMPT); continue; }
+      const got = await rooms.get(focusedRoomId);
+      if (!got || !got.transcript.length) write("(no history)\n");
+      else for (const m of got.transcript) {
+        write(`  [${m.from}${m.to.length ? " → " + m.to.join(", ") : ""}] ${m.text}\n`);
+      }
+      write(PROMPT); continue;
+    }
+
+    if (cls.kind === "roomPost") {
+      if (!focusedRoomId) { write("not in a room\n"); write(PROMPT); continue; }
+      if (!cls.text) { write("(nothing to post)\n"); write(PROMPT); continue; }
+      const p = pending.get(focusedRoomId);
+      try {
+        await rooms.post(focusedRoomId, {
+          from: humanName, text: cls.text, to: cls.to, turnId: p?.turnId,
+        });
+        // Only clear if no newer delivery arrived during the await.
+        if (pending.get(focusedRoomId)?.turnId === p?.turnId) pending.delete(focusedRoomId);
+      } catch (e) { write(`[error] ${(e as Error).message}\n`); }
+      write(PROMPT); continue;
+    }
   }
+
+  // ---- Cleanup: leave the focused room and stop the inbox server ----
+  if (focusedRoomId && rooms) { try { await rooms.leave(focusedRoomId, humanName); } catch { /* ignore */ } }
+  if (inbox !== null) { const ib = inbox as ReplInboxHandle; await ib.drain(); await ib.shutdown(); }
 }
