@@ -4,7 +4,7 @@ import type { AppConfig, AgentSpec } from "../src/config.ts";
 
 const baseCfg: AppConfig = {
   registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "",
-  bearerToken: "t", ollamaBaseUrl: "x", monitorUrl: "", maxDepth: 0,
+  bearerToken: "t", ollamaBaseUrl: "x", ollamaApiKey: "", monitorUrl: "", maxDepth: 0,
 };
 const spec = (backend: string): AgentSpec => ({
   name: "a", model: "m",

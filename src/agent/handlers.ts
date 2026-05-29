@@ -8,6 +8,7 @@ import type { StreamEvent } from "../protocol/client.ts";
 import type { AgentHandlerCtx } from "./base.ts";
 import type { ToolDeps } from "./tools.ts";
 import type { Emitter } from "../observability/emit.ts";
+import { selectSearchProvider } from "./web-search.ts";
 import { makeClaudeHandlers } from "./claude.ts";
 import { makeClaudeCodeHandlers } from "./claude-code.ts";
 import { makeOllamaHandlers } from "./ollama.ts";
@@ -38,7 +39,7 @@ export function buildHandlers(d: BuildHandlersDeps): Handlers {
       model: d.model, systemPrompt: preset.systemPrompt, apiKey: cfg.anthropicApiKey,
       store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
       selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
-      emit: d.emit,
+      emit: d.emit, webSearch: preset.webSearch,
     });
   }
   if (preset.backend === "claude-code") {
@@ -58,6 +59,7 @@ export function buildHandlers(d: BuildHandlersDeps): Handlers {
           store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
           selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
           emit: d.emit,
+          search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
         }
       : undefined,
   });

@@ -18,6 +18,8 @@ export type RolePreset = {
   // delegate_start, ...). Claude is always tool-capable; for Ollama, only
   // set this if the model actually supports function calling.
   toolCapable?: boolean;
+  // Claude backend only: expose Anthropic's server-side web_search tool.
+  webSearch?: boolean;
 };
 
 function isSkill(v: unknown): v is Skill {
@@ -51,6 +53,9 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
   if (o.toolCapable !== undefined && typeof o.toolCapable !== "boolean") {
     throw new Error(`${source}: toolCapable must be a boolean if present`);
   }
+  if (o.webSearch !== undefined && typeof o.webSearch !== "boolean") {
+    throw new Error(`${source}: webSearch must be a boolean if present`);
+  }
   return {
     backend: o.backend,
     model: o.model,
@@ -58,6 +63,7 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
     systemPrompt: o.systemPrompt,
     skills: o.skills,
     toolCapable: o.toolCapable as boolean | undefined,
+    webSearch: o.webSearch as boolean | undefined,
   };
 }
 

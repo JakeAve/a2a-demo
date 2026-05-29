@@ -13,10 +13,18 @@ export type OllamaDeps = {
   systemPrompt: string;
   baseUrl: string;
   store: ContextStore;
-  // When provided, this Ollama agent will be wired with the same A2A tools
-  // as the Claude backend. Requires a tool-capable model on the Ollama side.
+  // When provided, this Ollama agent is wired with the A2A tool runner (and,
+  // if the ToolDeps has a `search` provider, the web_search tool too). Requires
+  // a tool-capable model on the Ollama side.
   tools?: ToolDeps;
 };
+
+// The Ollama-format tool list, derived from the shared tool runner's getTools
+// (which already includes web_search when ToolDeps.search is set). Exported for
+// testing.
+export function buildOllamaTools(deps: OllamaDeps) {
+  return deps.tools ? toOllamaTools(deps.tools) : [];
+}
 
 type OllamaToolCall = {
   id?: string;
@@ -51,8 +59,23 @@ function historyToOllama(
   }));
 }
 
+// Run one tool call through the shared A2A tool runner (which handles
+// web_search too when a provider is configured).
+async function dispatchTool(
+  deps: OllamaDeps,
+  tc: OllamaToolCall,
+  ctx: AgentHandlerCtx,
+  contextId: string,
+): Promise<string> {
+  if (!deps.tools) return JSON.stringify({ error: `unknown tool ${tc.function.name}` });
+  return runTool(deps.tools, tc.function.name, tc.function.arguments ?? {}, ctx.depth, contextId, {
+    sessionId: ctx.sessionId,
+    requestId: ctx.requestId,
+  });
+}
+
 export function makeOllamaHandlers(deps: OllamaDeps) {
-  const tools = deps.tools ? toOllamaTools(deps.tools) : undefined;
+  const tools = buildOllamaTools(deps);
 
   async function handler(ctx: AgentHandlerCtx): Promise<{ text: string }> {
     const contextId = ctx.message.contextId ?? crypto.randomUUID();
@@ -71,7 +94,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         messages,
         stream: false,
       };
-      if (tools) body.tools = tools;
+      if (tools.length) body.tools = tools;
 
       const res = await fetch(`${deps.baseUrl}/api/chat`, {
         method: "POST",
@@ -86,7 +109,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
 
       if (content) finalText = content;
 
-      if (!deps.tools || toolCalls.length === 0) break;
+      if (tools.length === 0 || toolCalls.length === 0) break;
 
       // Append the assistant's tool-call message verbatim so the model sees
       // its own request when reasoning over results.
@@ -97,14 +120,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
       });
 
       for (const tc of toolCalls) {
-        const result = await runTool(
-          deps.tools,
-          tc.function.name,
-          tc.function.arguments ?? {},
-          ctx.depth,
-          contextId,
-          { sessionId: ctx.sessionId, requestId: ctx.requestId },
-        );
+        const result = await dispatchTool(deps, tc, ctx, contextId);
         messages.push({
           role: "tool",
           content: result,
@@ -139,7 +155,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         messages,
         stream: true,
       };
-      if (tools) body.tools = tools;
+      if (tools.length) body.tools = tools;
 
       const res = await fetch(`${deps.baseUrl}/api/chat`, {
         method: "POST",
@@ -187,7 +203,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         }
       }
 
-      if (!deps.tools || turnToolCalls.length === 0) {
+      if (tools.length === 0 || turnToolCalls.length === 0) {
         finalText = turnContent;
         break;
       }
@@ -201,14 +217,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
         tool_calls: turnToolCalls,
       });
       for (const tc of turnToolCalls) {
-        const result = await runTool(
-          deps.tools,
-          tc.function.name,
-          tc.function.arguments ?? {},
-          ctx.depth,
-          contextId,
-          { sessionId: ctx.sessionId, requestId: ctx.requestId },
-        );
+        const result = await dispatchTool(deps, tc, ctx, contextId);
         messages.push({
           role: "tool",
           content: result,
