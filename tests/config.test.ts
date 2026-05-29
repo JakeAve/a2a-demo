@@ -6,6 +6,7 @@ const baseCfg: AppConfig = {
   registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "",
   bearerToken: "t", ollamaBaseUrl: "x", ollamaApiKey: "", monitorUrl: "", maxDepth: 0,
   roomBrokerPort: 7892, roomMaxTurns: 24, agentDeadlineMs: 120_000, humanDeadlineMs: 3_600_000,
+  humanName: "human",
 };
 const spec = (backend: string): AgentSpec => ({
   name: "a", model: "m",
@@ -48,4 +49,9 @@ Deno.test("loadConfig provides room defaults", async () => {
   assertEquals(cfg.roomMaxTurns, 24);
   assertEquals(cfg.agentDeadlineMs, 120_000);
   assertEquals(cfg.humanDeadlineMs, 3_600_000);
+});
+
+Deno.test("loadConfig defaults the human member name", async () => {
+  const cfg = await loadConfig();
+  assertEquals(cfg.humanName, "human");
 });

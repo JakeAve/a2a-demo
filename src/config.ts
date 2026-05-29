@@ -14,6 +14,7 @@ export type AppConfig = {
   roomMaxTurns: number;
   agentDeadlineMs: number;
   humanDeadlineMs: number;
+  humanName: string; // the human's room-member name (REPL participant)
 };
 
 export type AgentSpec = {
@@ -38,6 +39,7 @@ export async function loadConfig(): Promise<AppConfig> {
     roomMaxTurns: Number(env.A2A_ROOM_MAX_TURNS ?? 24),
     agentDeadlineMs: Number(env.A2A_ROOM_AGENT_DEADLINE_MS ?? 120_000),
     humanDeadlineMs: Number(env.A2A_ROOM_HUMAN_DEADLINE_MS ?? 3_600_000),
+    humanName: env.A2A_HUMAN_NAME ?? "human",
   };
 }
 
