@@ -1,0 +1,18 @@
+/* monitor/web/styles.css */
+:root { color-scheme: dark; --bg:#0d0d0f; --fg:#e8e8ea; --mut:#9aa; --line:#333;
+  --repl:#888; --coord:#2e6fff; --del:#e0a030; --ret:#7fd17f; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.4 ui-sans-serif,system-ui,sans-serif; }
+header { padding:10px 14px; border-bottom:1px solid var(--line); }
+main { padding:14px; }
+a { color:var(--coord); cursor:pointer; text-decoration:none; }
+table { width:100%; border-collapse:collapse; }
+th,td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); }
+.mut { color:var(--mut); }
+.lane-head { font-weight:700; font-size:11px; }
+.detail { margin-top:12px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+.bubble { background:#0004; border-radius:8px; padding:7px 10px; margin:5px 0; white-space:pre-wrap; }
+.tabs { display:flex; gap:8px; margin-bottom:8px; }
+.tab { border:1px solid var(--line); border-radius:16px; padding:3px 10px; cursor:pointer; }
+.tab.on { background:#2e6fff22; border-color:var(--coord); }
+svg text { fill:var(--fg); font:11px ui-monospace,monospace; }
