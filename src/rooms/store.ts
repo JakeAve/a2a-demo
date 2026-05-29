@@ -1,7 +1,7 @@
 // Persistence for the Room Broker. Owns its OWN Deno KV. Mutations for a
 // given room are serialised through a per-room promise chain so seq and
 // turnCount never race (the pattern monitor/store.ts uses per session).
-import type { Member, RoomRecord, TranscriptMessage } from "./types.ts";
+import type { Delivery, Member, RoomRecord, TranscriptMessage } from "./types.ts";
 
 export type CreateRoomInput = {
   title: string;
@@ -115,5 +115,80 @@ export class RoomStore {
       if (room) out.push(room);
     }
     return out;
+  }
+
+  async createDelivery(
+    roomId: string, member: string, addressedBy: string, ttlMs: number,
+  ): Promise<Delivery> {
+    const now = this.now();
+    const delivery: Delivery = {
+      turnId: crypto.randomUUID(), roomId, member, addressedBy,
+      createdAt: now, deadline: now + ttlMs, status: "pending",
+    };
+    await this.kv.set(["room_delivery", roomId, delivery.turnId], delivery);
+    return delivery;
+  }
+
+  async resolveDelivery(roomId: string, turnId: string): Promise<boolean> {
+    const key = ["room_delivery", roomId, turnId];
+    const cur = (await this.kv.get<Delivery>(key)).value;
+    if (!cur || cur.status === "resolved") return false;
+    cur.status = "resolved";
+    await this.kv.set(key, cur);
+    return true;
+  }
+
+  async pendingDeliveries(roomId: string): Promise<Delivery[]> {
+    const out: Delivery[] = [];
+    for await (const e of this.kv.list<Delivery>({ prefix: ["room_delivery", roomId] })) {
+      if (e.value.status === "pending") out.push(e.value);
+    }
+    return out;
+  }
+
+  async isIdle(roomId: string): Promise<boolean> {
+    return (await this.pendingDeliveries(roomId)).length === 0;
+  }
+
+  async atTurnCap(roomId: string): Promise<boolean> {
+    const room = await this.getRoom(roomId);
+    return !!room && room.turnCount >= room.maxTurns;
+  }
+
+  // Resolve every pending delivery (any room) whose deadline has passed.
+  async sweepExpired(): Promise<Delivery[]> {
+    const now = this.now();
+    const swept: Delivery[] = [];
+    for await (const e of this.kv.list<Delivery>({ prefix: ["room_delivery"] })) {
+      const d = e.value;
+      if (d.status === "pending" && d.deadline <= now) {
+        d.status = "resolved";
+        await this.kv.set(e.key, d);
+        swept.push(d);
+      }
+    }
+    return swept;
+  }
+
+  async closeRoom(roomId: string): Promise<void> {
+    await this.#withLock(roomId, async () => {
+      const room = await this.getRoom(roomId);
+      if (!room) return;
+      room.status = "closed";
+      await this.#setRoom(room);
+    });
+  }
+
+  // Mark a member inactive. Returns true if fewer than 2 active members remain
+  // (the caller closes the room in that case).
+  async deactivateMember(roomId: string, name: string): Promise<boolean> {
+    return await this.#withLock(roomId, async () => {
+      const room = await this.getRoom(roomId);
+      if (!room) return false;
+      const m = room.members.find((x) => x.name === name);
+      if (m) m.active = false;
+      await this.#setRoom(room);
+      return room.members.filter((x) => x.active).length < 2;
+    });
   }
 }
