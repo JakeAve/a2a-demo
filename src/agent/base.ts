@@ -62,7 +62,8 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
     try {
       const result = await cfg.handler({ depth, message: body.message, sessionId, requestId });
       void emit({ ...base, ts: now(), type: "message.completed", data: { text: result.text } });
-      void emit({ ...base, ts: now(), type: "turn.completed", data: { durationMs: now() - startedTs, status: "ok" } });
+      const endTs = now();
+      void emit({ ...base, ts: endTs, type: "turn.completed", data: { durationMs: endTs - startedTs, status: "ok" } });
       return c.json({ text: result.text });
     } catch (e) {
       void emit({ ...base, ts: now(), type: "error", data: { message: (e as Error).message, where: "send" } });
@@ -92,7 +93,8 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
             write(ev);
           }
           void emit({ ...base, ts: now(), type: "message.completed", data: { text: acc } });
-          void emit({ ...base, ts: now(), type: "turn.completed", data: { durationMs: now() - startedTs, status: "ok" } });
+          const streamEndTs = now();
+          void emit({ ...base, ts: streamEndTs, type: "turn.completed", data: { durationMs: streamEndTs - startedTs, status: "ok" } });
         } catch (e) {
           write({ type: "error", message: (e as Error).message });
           void emit({ ...base, ts: now(), type: "error", data: { message: (e as Error).message, where: "stream" } });

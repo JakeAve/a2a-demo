@@ -23,6 +23,9 @@ export function createEmitter(
   if (!monitorUrl) return () => Promise.resolve();
   const ingest = `${monitorUrl.replace(/\/$/, "")}/ingest`;
   return (event: EmitEvent) => {
+    // Drop events that can't be correlated to a session/request — they would
+    // fail schema validation at the monitor and can't be placed in any tree.
+    if (!event.sessionId || !event.requestId) return Promise.resolve();
     // Fire-and-forget: do not await the network in the agent's hot path.
     void post(ingest, event, token).catch(() => {});
     return Promise.resolve();

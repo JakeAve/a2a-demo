@@ -30,3 +30,11 @@ Deno.test("emit swallows post errors (never throws into the caller)", async () =
   await emit(sample); // must not throw
   assertEquals(true, true);
 });
+
+Deno.test("emit drops events missing sessionId or requestId (no post)", async () => {
+  let calls = 0;
+  const emit = createEmitter("http://mon:7891", undefined, () => { calls++; return Promise.resolve(); });
+  await emit({ sessionId: "", requestId: "r1", ts: 1, agent: "a", depth: 0, type: "turn.started", data: {} });
+  await emit({ sessionId: "s1", requestId: "", ts: 1, agent: "a", depth: 0, type: "turn.started", data: {} });
+  assertEquals(calls, 0);
+});
