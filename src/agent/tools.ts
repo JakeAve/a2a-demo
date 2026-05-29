@@ -141,6 +141,14 @@ const SPAWN_TOOLS: BaseTool[] = [
 
 export const DELEGATION_SUFFIX = `
 
+You can answer most requests yourself — do that by default. Delegation has real
+cost (latency, tokens, and peers may delegate further), so only delegate when it
+clearly pays off: the work splits into genuinely independent parts worth running
+in parallel, a peer has a capability or cheaper/faster model better suited to it,
+or the task is too large to do well in one turn. Don't break a question into
+sub-questions you could just answer. Keep it to a few delegations, not a swarm,
+and don't hand work to a peer that would only delegate it again.
+
 Delegation tools available to you:
 - list_agents: discover which peer agents exist.
 - list_my_threads: see your own active sub-conversations with peers.
