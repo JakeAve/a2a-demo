@@ -10,6 +10,7 @@ import { SessionStore } from "./store/sessions.ts";
 import { buildHandlers } from "./agent/handlers.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
+import { createEmitter } from "./observability/emit.ts";
 
 // Wait until the registry has an entry for `name`, or give up.
 async function waitForRegistration(
@@ -33,6 +34,7 @@ export async function runOrchestrator(
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
   const kv = await Deno.openKv();
+  const emit = createEmitter(cfg.monitorUrl || undefined, cfg.bearerToken);
   const store = new ContextStore(kv);
   const threads = new ThreadStore(kv);
   const sessions = new SessionStore(kv);
@@ -122,6 +124,7 @@ export async function runOrchestrator(
         selfName: spec.name,
         spawnAgent,
         availableRoles,
+        emit,
       });
 
       const handle = await startAgent({
@@ -129,6 +132,7 @@ export async function runOrchestrator(
         bearerToken: cfg.bearerToken,
         handler: handlers.handler,
         streamHandler: handlers.streamHandler,
+        emit,
       });
       await registryClient.register(handle.card);
       handles.push(handle);
@@ -160,6 +164,6 @@ export async function runOrchestrator(
   };
   Deno.addSignalListener("SIGINT", shutdown);
 
-  await runRepl({ agents, bearerToken: cfg.bearerToken });
+  await runRepl({ agents, bearerToken: cfg.bearerToken, emit });
   await shutdown();
 }
