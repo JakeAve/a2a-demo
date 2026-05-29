@@ -8,6 +8,7 @@ import type { RegistryClient } from "../registry/client.ts";
 import { sendMessage } from "../protocol/client.ts";
 import type { Emitter } from "../observability/emit.ts";
 import { now } from "../observability/emit.ts";
+import type { WebSearchProvider } from "./web-search.ts";
 
 export type SpawnResult = {
   ok: boolean;
@@ -25,6 +26,8 @@ export type ToolDeps = {
   selfName: string;
   // Optional event emitter; defaults to no-op inside runTool.
   emit?: Emitter;
+  // When set, a web_search tool is exposed and backed by this provider.
+  search?: WebSearchProvider;
   // When omitted, list_roles and spawn_agent are not exposed.
   spawnAgent?: (
     role: string,
@@ -139,6 +142,18 @@ const SPAWN_TOOLS: BaseTool[] = [
   },
 ];
 
+// Offered only when a WebSearchProvider is configured on ToolDeps.search.
+const WEB_SEARCH_TOOL: BaseTool = {
+  name: "web_search",
+  description:
+    "Search the web for current, factual information. Returns results with title, url, and a content snippet. Use this instead of guessing whenever a question needs current or verifiable facts.",
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string", description: "The search query" } },
+    required: ["query"],
+  },
+};
+
 export const DELEGATION_SUFFIX = `
 
 You can answer most requests yourself — do that by default. Delegation has real
@@ -165,7 +180,9 @@ Agent lifecycle tools available to you:
 - spawn_agent(role, name?, model?): boot a new peer agent as its own process. The new agent registers itself; afterwards list_agents will include it and delegate_start can target it.`;
 
 export function getTools(deps: ToolDeps): BaseTool[] {
-  return deps.spawnAgent ? [...BASE_TOOLS, ...SPAWN_TOOLS] : BASE_TOOLS;
+  const tools = deps.spawnAgent ? [...BASE_TOOLS, ...SPAWN_TOOLS] : [...BASE_TOOLS];
+  if (deps.search) tools.push(WEB_SEARCH_TOOL);
+  return tools;
 }
 
 export function toAnthropicTools(deps: ToolDeps) {
@@ -233,6 +250,15 @@ export async function runTool(
       sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
       depth, ts: now(), type, data, threadId,
     });
+
+  // Auto-emit a tool.call for every tool EXCEPT the delegation/spawn tools,
+  // which emit their own richer events (cross-lane arrows / spawn) below. This
+  // is the single client-tool dispatch point, so any new tool is visible in the
+  // monitor by default — no per-tool wiring required.
+  if (name !== "delegate_start" && name !== "delegate_continue" && name !== "spawn_agent") {
+    ev("tool.call", { tool: name, args: truncate(JSON.stringify(args), 120) });
+  }
+
   try {
     if (name === "list_agents") {
       const cards = await deps.registry.list();
@@ -244,7 +270,6 @@ export async function runTool(
           skills: c.skills,
         })),
       );
-      ev("tool.call", { tool: "list_agents", resultPreview: `${peers.length} peers` });
       return result;
     }
 
@@ -259,7 +284,6 @@ export async function runTool(
           lastUsedAt: t.lastUsedAt,
         })),
       );
-      ev("tool.call", { tool: "list_my_threads" });
       return result;
     }
 
@@ -311,7 +335,6 @@ export async function runTool(
         return JSON.stringify({ error: `unknown thread ${threadId}` });
       }
       const ok = await deps.threads.reset(threadId);
-      ev("tool.call", { tool: "reset_thread", threadId });
       return JSON.stringify({ ok });
     }
 
@@ -320,7 +343,6 @@ export async function runTool(
         return JSON.stringify({ error: "spawn capability not available" });
       }
       const result = JSON.stringify(deps.availableRoles());
-      ev("tool.call", { tool: "list_roles" });
       return result;
     }
 
@@ -338,6 +360,17 @@ export async function runTool(
       const result = await deps.spawnAgent(role, customName, model);
       ev("spawn", { role, name: result.name ?? customName ?? role, model: model ?? null, ok: result.ok });
       return JSON.stringify(result);
+    }
+
+    if (name === "web_search") {
+      if (!deps.search) return JSON.stringify({ error: "web search not configured" });
+      const query = String(args.query ?? "");
+      const results = (await deps.search(query, 5)).map((r) => ({
+        title: r.title,
+        url: r.url,
+        content: r.content.length > 800 ? r.content.slice(0, 800) + "…" : r.content,
+      }));
+      return JSON.stringify({ results });
     }
 
     return JSON.stringify({ error: `unknown tool ${name}` });

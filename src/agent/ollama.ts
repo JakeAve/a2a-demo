@@ -7,43 +7,23 @@ import {
   toOllamaTools,
   type ToolDeps,
 } from "./tools.ts";
-import type { WebSearchProvider } from "./web-search.ts";
 
 export type OllamaDeps = {
   model: string;
   systemPrompt: string;
   baseUrl: string;
   store: ContextStore;
-  // When provided, this Ollama agent will be wired with the same A2A tools
-  // as the Claude backend. Requires a tool-capable model on the Ollama side.
+  // When provided, this Ollama agent is wired with the A2A tool runner (and,
+  // if the ToolDeps has a `search` provider, the web_search tool too). Requires
+  // a tool-capable model on the Ollama side.
   tools?: ToolDeps;
-  // When both are set, a web_search tool is exposed and backed by `search`.
-  webSearch?: boolean;
-  search?: WebSearchProvider;
 };
 
-// web_search tool definition in Ollama's function-call schema. Backend-agnostic
-// — the actual search is performed by the injected WebSearchProvider.
-const WEB_SEARCH_TOOL = {
-  type: "function" as const,
-  function: {
-    name: "web_search",
-    description:
-      "Search the web for current, factual information. Returns a list of results with title, url, and a content snippet.",
-    parameters: {
-      type: "object",
-      properties: { query: { type: "string", description: "The search query" } },
-      required: ["query"],
-    },
-  },
-};
-
-// Combined tool list: A2A tools (if any) plus web_search when a provider is
-// available. Exported for testing.
+// The Ollama-format tool list, derived from the shared tool runner's getTools
+// (which already includes web_search when ToolDeps.search is set). Exported for
+// testing.
 export function buildOllamaTools(deps: OllamaDeps) {
-  const tools = deps.tools ? toOllamaTools(deps.tools) : [];
-  if (deps.webSearch && deps.search) return [...tools, WEB_SEARCH_TOOL];
-  return tools;
+  return deps.tools ? toOllamaTools(deps.tools) : [];
 }
 
 type OllamaToolCall = {
@@ -79,34 +59,19 @@ function historyToOllama(
   }));
 }
 
-// Run one tool call: web_search goes to the injected provider, everything else
-// to the shared A2A tool runner.
+// Run one tool call through the shared A2A tool runner (which handles
+// web_search too when a provider is configured).
 async function dispatchTool(
   deps: OllamaDeps,
   tc: OllamaToolCall,
   ctx: AgentHandlerCtx,
   contextId: string,
 ): Promise<string> {
-  if (tc.function.name === "web_search" && deps.search) {
-    const query = String((tc.function.arguments ?? {}).query ?? "");
-    try {
-      const results = (await deps.search(query, 5)).map((r) => ({
-        title: r.title,
-        url: r.url,
-        content: r.content.length > 800 ? r.content.slice(0, 800) + "…" : r.content,
-      }));
-      return JSON.stringify({ results });
-    } catch (e) {
-      return JSON.stringify({ error: (e as Error).message });
-    }
-  }
-  if (deps.tools) {
-    return runTool(deps.tools, tc.function.name, tc.function.arguments ?? {}, ctx.depth, contextId, {
-      sessionId: ctx.sessionId,
-      requestId: ctx.requestId,
-    });
-  }
-  return JSON.stringify({ error: `unknown tool ${tc.function.name}` });
+  if (!deps.tools) return JSON.stringify({ error: `unknown tool ${tc.function.name}` });
+  return runTool(deps.tools, tc.function.name, tc.function.arguments ?? {}, ctx.depth, contextId, {
+    sessionId: ctx.sessionId,
+    requestId: ctx.requestId,
+  });
 }
 
 export function makeOllamaHandlers(deps: OllamaDeps) {

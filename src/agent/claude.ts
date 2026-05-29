@@ -12,6 +12,7 @@ import {
   type ToolDeps,
 } from "./tools.ts";
 import type { Emitter } from "../observability/emit.ts";
+import { now } from "../observability/emit.ts";
 
 export type { SpawnResult };
 
@@ -103,6 +104,21 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
       }>;
 
       if (textBlocks.length) finalText = textBlocks.join("\n");
+
+      // Surface Anthropic's server-side web_search calls as tool.call events so
+      // they render as round arrows in the monitor, just like client tools.
+      if (deps.emit) {
+        for (const b of resp.content) {
+          if ((b as { type?: string }).type === "server_tool_use") {
+            const sb = b as { name?: string; input?: Record<string, unknown> };
+            void deps.emit({
+              sessionId: ctx.sessionId, requestId: ctx.requestId, agent: deps.selfName,
+              depth: ctx.depth, ts: now(), type: "tool.call",
+              data: { tool: sb.name ?? "web_search", args: JSON.stringify(sb.input ?? {}).slice(0, 120) },
+            });
+          }
+        }
+      }
 
       // A server tool (web_search) ran and Claude needs another turn to finish.
       // Resend the assistant content unchanged — there are no client

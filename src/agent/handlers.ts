@@ -59,9 +59,8 @@ export function buildHandlers(d: BuildHandlersDeps): Handlers {
           store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
           selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
           emit: d.emit,
+          search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
         }
       : undefined,
-    webSearch: preset.webSearch,
-    search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
   });
 }
