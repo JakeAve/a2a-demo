@@ -92,9 +92,17 @@ spawn capability — that authority lives only with the orchestrator.
 
 ### Depth guard
 
-Each `delegate_*` call increments an `x-depth` header. Depth ≥ 2 is
-rejected with HTTP 429. So `REPL → coordinator → scout` is fine; the next
-hop would be `429 Too Many Delegations`.
+Each `delegate_*` call increments an `x-depth` header. A request whose depth
+reaches the cap is rejected with HTTP 429. The cap is **pegged to the current
+registered-agent count** (floored at 2), so a bigger swarm can fan out deeper —
+e.g. with `coordinator, researcher, scout` registered, `REPL → coordinator →
+researcher → scout` is allowed. Set `A2A_MAX_DEPTH` to a fixed number to
+override (e.g. `A2A_MAX_DEPTH=2` restores the original `REPL → A → B` budget).
+
+Note: a delegating role (e.g. `researcher`, whose job is to decompose and
+delegate) only fans out usefully when it sits high enough in the tree to have
+remaining depth budget — chaining two delegating roles needs the cap to allow
+it.
 
 ### Standalone agents
 

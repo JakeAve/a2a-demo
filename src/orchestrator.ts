@@ -35,6 +35,11 @@ export async function runOrchestrator(
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
   const kv = await Deno.openKv();
   const emit = createEmitter(cfg.monitorUrl || undefined, cfg.bearerToken);
+  // Max delegation depth: a fixed A2A_MAX_DEPTH if set, else pegged to the
+  // current registered-agent count (floored at 2 so it never tightens below
+  // the original REPL→A→B budget). More agents → deeper fan-out allowed.
+  const resolveMaxDepth = async () =>
+    cfg.maxDepth > 0 ? cfg.maxDepth : Math.max(2, (await registryClient.list()).length);
   const store = new ContextStore(kv);
   const threads = new ThreadStore(kv);
   const sessions = new SessionStore(kv);
@@ -133,6 +138,7 @@ export async function runOrchestrator(
         handler: handlers.handler,
         streamHandler: handlers.streamHandler,
         emit,
+        maxDepth: resolveMaxDepth,
       });
       await registryClient.register(handle.card);
       handles.push(handle);

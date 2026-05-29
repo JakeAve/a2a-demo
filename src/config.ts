@@ -8,6 +8,7 @@ export type AppConfig = {
   bearerToken: string;
   ollamaBaseUrl: string;
   monitorUrl: string; // empty string = disabled
+  maxDepth: number; // 0 = peg to current agent count; >0 = fixed cap
 };
 
 export type AgentSpec = {
@@ -26,6 +27,7 @@ export async function loadConfig(): Promise<AppConfig> {
     bearerToken: env.AGENT_BEARER_TOKEN ?? "local-dev-secret",
     ollamaBaseUrl: env.OLLAMA_BASE_URL ?? "http://localhost:11434",
     monitorUrl: env.A2A_MONITOR_URL ?? "",
+    maxDepth: Number(env.A2A_MAX_DEPTH ?? 0),
   };
 }
 

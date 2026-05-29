@@ -60,6 +60,9 @@ const store = new ContextStore(kv);
 const threads = new ThreadStore(kv);
 const sessions = new SessionStore(kv);
 const registry = new RegistryClient(registryUrl);
+// Fixed A2A_MAX_DEPTH if set, else pegged to the current agent count (min 2).
+const resolveMaxDepth = async () =>
+  cfg.maxDepth > 0 ? cfg.maxDepth : Math.max(2, (await registry.list()).length);
 
 const baseCard: AgentCard = {
   name: agentName,
@@ -90,6 +93,7 @@ const handle = await startAgent({
   handler: handlers.handler,
   streamHandler: handlers.streamHandler,
   emit,
+  maxDepth: resolveMaxDepth,
 });
 await registry.register(handle.card);
 console.log(`[${agentName}] ${handle.card.url} (${model})  registered with ${registryUrl}`);
