@@ -6,6 +6,8 @@ import type { ContextStore } from "../store/context.ts";
 import type { ThreadStore } from "../store/threads.ts";
 import type { RegistryClient } from "../registry/client.ts";
 import { sendMessage } from "../protocol/client.ts";
+import type { Emitter } from "../observability/emit.ts";
+import { now } from "../observability/emit.ts";
 
 export type SpawnResult = {
   ok: boolean;
@@ -13,12 +15,16 @@ export type SpawnResult = {
   error?: string;
 };
 
+export type EmitIds = { sessionId: string; requestId: string };
+
 export type ToolDeps = {
   store: ContextStore;
   threads: ThreadStore;
   registry: RegistryClient;
   bearerToken: string;
   selfName: string;
+  // Optional event emitter; defaults to no-op inside runTool.
+  emit?: Emitter;
   // When omitted, list_roles and spawn_agent are not exposed.
   spawnAgent?: (
     role: string,
@@ -187,11 +193,14 @@ async function delegate(
   peerUrl: string,
   prompt: string,
   depth: number,
+  ids: EmitIds,
 ): Promise<string> {
   const res = await sendMessage({
     url: peerUrl,
     token: deps.bearerToken,
     depth: depth + 1,
+    sessionId: ids.sessionId,
+    requestId: ids.requestId,
     message: {
       messageId: crypto.randomUUID(),
       role: "agent",
@@ -208,23 +217,32 @@ export async function runTool(
   args: Record<string, unknown>,
   depth: number,
   parentContextId: string,
+  ids: EmitIds = { sessionId: "", requestId: "" },
 ): Promise<string> {
+  const emit = deps.emit ?? (() => Promise.resolve());
+  const ev = (type: Parameters<Emitter>[0]["type"], data: Record<string, unknown>, threadId?: string) =>
+    void emit({
+      sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
+      depth, ts: now(), type, data, threadId,
+    });
   try {
     if (name === "list_agents") {
       const cards = await deps.registry.list();
       const peers = cards.filter((c) => c.name !== deps.selfName);
-      return JSON.stringify(
+      const result = JSON.stringify(
         peers.map((c) => ({
           name: c.name,
           description: c.description,
           skills: c.skills,
         })),
       );
+      ev("tool.call", { tool: "list_agents", resultPreview: `${peers.length} peers` });
+      return result;
     }
 
     if (name === "list_my_threads") {
       const threads = await deps.threads.list(parentContextId);
-      return JSON.stringify(
+      const result = JSON.stringify(
         threads.map((t) => ({
           threadId: t.threadId,
           peer: t.peer,
@@ -233,6 +251,8 @@ export async function runTool(
           lastUsedAt: t.lastUsedAt,
         })),
       );
+      ev("tool.call", { tool: "list_my_threads" });
+      return result;
     }
 
     if (name === "delegate_start") {
@@ -244,8 +264,14 @@ export async function runTool(
       const card = await deps.registry.get(target);
       if (!card) return JSON.stringify({ error: `unknown agent ${target}` });
       const meta = await deps.threads.start(parentContextId, target, title);
-      const text = await delegate(deps, meta.threadId, card.url, prompt, depth);
+      ev("delegate.start", { peer: target, title, prompt: truncate(prompt, 200) }, meta.threadId);
+      const startedTs = now();
+      // If delegate() throws, the outer catch returns an error JSON and
+      // delegate.return is not emitted — the monitor must treat a dangling
+      // delegate.start as an implicitly-failed leg (v1 limitation).
+      const text = await delegate(deps, meta.threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(meta.threadId);
+      ev("delegate.return", { peer: target, ok: true, durationMs: now() - startedTs, preview: truncate(text, 200) }, meta.threadId);
       return JSON.stringify({ threadId: meta.threadId, text });
     }
 
@@ -261,8 +287,12 @@ export async function runTool(
       }
       const card = await deps.registry.get(meta.peer);
       if (!card) return JSON.stringify({ error: `peer ${meta.peer} is gone` });
-      const text = await delegate(deps, threadId, card.url, prompt, depth);
+      ev("delegate.continue", { peer: meta.peer, turn: meta.turnCount + 1, prompt: truncate(prompt, 200) }, threadId);
+      const startedTs = now();
+      // See delegate_start: a throw here leaves a dangling delegate.start (v1).
+      const text = await delegate(deps, threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(threadId);
+      ev("delegate.return", { peer: meta.peer, ok: true, durationMs: now() - startedTs, preview: truncate(text, 200) }, threadId);
       return JSON.stringify({ threadId, text });
     }
 
@@ -273,6 +303,7 @@ export async function runTool(
         return JSON.stringify({ error: `unknown thread ${threadId}` });
       }
       const ok = await deps.threads.reset(threadId);
+      ev("tool.call", { tool: "reset_thread", threadId });
       return JSON.stringify({ ok });
     }
 
@@ -280,7 +311,9 @@ export async function runTool(
       if (!deps.availableRoles) {
         return JSON.stringify({ error: "spawn capability not available" });
       }
-      return JSON.stringify(deps.availableRoles());
+      const result = JSON.stringify(deps.availableRoles());
+      ev("tool.call", { tool: "list_roles" });
+      return result;
     }
 
     if (name === "spawn_agent") {
@@ -295,6 +328,7 @@ export async function runTool(
         ? args.model
         : undefined;
       const result = await deps.spawnAgent(role, customName, model);
+      ev("spawn", { role, name: result.name ?? customName ?? role, model: model ?? null, ok: result.ok });
       return JSON.stringify(result);
     }
 

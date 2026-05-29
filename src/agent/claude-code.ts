@@ -9,6 +9,7 @@ import type { ThreadStore } from "../store/threads.ts";
 import type { SessionStore } from "../store/sessions.ts";
 import type { RegistryClient } from "../registry/client.ts";
 import type { ToolDeps } from "./tools.ts";
+import type { Emitter } from "../observability/emit.ts";
 import { a2aToolNames, buildA2aMcpServer } from "./claude-code-tools.ts";
 
 export function resolveClaudeCodeEnv(
@@ -54,6 +55,7 @@ export type ClaudeCodeDeps = {
   selfName: string;
   spawnAgent?: ToolDeps["spawnAgent"];
   availableRoles?: ToolDeps["availableRoles"];
+  emit?: Emitter;
   runQuery?: QueryFn; // defaults to the real SDK query()
 };
 
@@ -109,6 +111,7 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
     selfName: deps.selfName,
     spawnAgent: deps.spawnAgent,
     availableRoles: deps.availableRoles,
+    emit: deps.emit,
   };
   const allowedTools = a2aToolNames(toolDeps);
   const runQuery = deps.runQuery ?? (sdkQuery as unknown as QueryFn);
@@ -119,7 +122,8 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
     await deps.store.append(contextId, { role: "user", content: prompt });
     const resume = await deps.sessions.get(contextId);
     const env = resolveClaudeCodeEnv(Deno.env.toObject(), deps.oauthToken, deps.apiKey);
-    const server = buildA2aMcpServer(toolDeps, ctx.depth, contextId);
+    const ids = { sessionId: ctx.sessionId, requestId: ctx.requestId };
+    const server = buildA2aMcpServer(toolDeps, ctx.depth, contextId, undefined, ids);
     const options: Record<string, unknown> = {
       systemPrompt: { type: "preset", preset: "claude_code", append: deps.systemPrompt },
       model: deps.model,

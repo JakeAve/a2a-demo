@@ -103,6 +103,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
           tc.function.arguments ?? {},
           ctx.depth,
           contextId,
+          { sessionId: ctx.sessionId, requestId: ctx.requestId },
         );
         messages.push({
           role: "tool",
@@ -206,6 +207,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
           tc.function.arguments ?? {},
           ctx.depth,
           contextId,
+          { sessionId: ctx.sessionId, requestId: ctx.requestId },
         );
         messages.push({
           role: "tool",

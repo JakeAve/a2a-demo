@@ -1,9 +1,12 @@
 import { streamMessage } from "./protocol/client.ts";
 import type { AgentCard } from "./protocol/types.ts";
+import type { Emitter } from "./observability/emit.ts";
+import { now } from "./observability/emit.ts";
 
 export type ReplDeps = {
   agents: Map<string, AgentCard>; // name → card
   bearerToken: string;
+  emit?: Emitter;
 };
 
 const PROMPT = "\n> ";
@@ -11,6 +14,8 @@ const PROMPT = "\n> ";
 export async function runRepl(deps: ReplDeps): Promise<void> {
   const decoder = new TextDecoder();
   const contextId = crypto.randomUUID();
+  const sessionId = contextId; // session == driver run
+  const emit: Emitter = deps.emit ?? (() => Promise.resolve());
   Deno.stdout.writeSync(new TextEncoder().encode(PROMPT));
 
   for await (const chunk of Deno.stdin.readable) {
@@ -35,13 +40,21 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
       continue;
     }
 
+    const requestId = crypto.randomUUID();
+    void emit({
+      sessionId, requestId, agent: "REPL", depth: 0, ts: now(),
+      type: "request.started", data: { target: name, prompt },
+    });
     const enc = new TextEncoder();
     Deno.stdout.writeSync(enc.encode(`[${name}] `));
+    const startedTs = now();
     try {
       for await (const ev of streamMessage({
         url: card.url,
         token: deps.bearerToken,
         depth: 0,
+        sessionId,
+        requestId,
         message: {
           messageId: crypto.randomUUID(),
           role: "user",
@@ -61,6 +74,10 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
     } catch (e) {
       Deno.stdout.writeSync(enc.encode(`\n[error] ${(e as Error).message}`));
     }
+    void emit({
+      sessionId, requestId, agent: "REPL", depth: 0, ts: now(),
+      type: "request.completed", data: { durationMs: now() - startedTs },
+    });
     Deno.stdout.writeSync(enc.encode(PROMPT));
   }
 }

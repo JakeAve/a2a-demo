@@ -33,6 +33,8 @@ Deno.test("ollama handler: forwards prompt and stores history", async () => {
 
   const result = await handler({
     depth: 0,
+    sessionId: "",
+    requestId: "",
     message: { messageId: "1", role: "user", parts: [{ type: "text", text: "hi" }], contextId: "c1" },
   });
 

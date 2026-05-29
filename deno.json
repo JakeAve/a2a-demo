@@ -2,7 +2,8 @@
   "tasks": {
     "start": "deno run -A --unstable-kv --env-file=.env src/main.ts",
     "start:agent": "deno run -A --unstable-kv --env-file=.env src/agent-entry.ts",
-    "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv"
+    "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv",
+    "monitor": "deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv --env-file=.env monitor/main.ts"
   },
   "imports": {
     "@std/dotenv": "jsr:@std/dotenv@^0.225.3",

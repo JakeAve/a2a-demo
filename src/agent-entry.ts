@@ -15,6 +15,7 @@ import { SessionStore } from "./store/sessions.ts";
 import { buildHandlers } from "./agent/handlers.ts";
 import { RegistryClient } from "./registry/client.ts";
 import type { AgentCard } from "./protocol/types.ts";
+import { createEmitter } from "./observability/emit.ts";
 
 function getFlag(args: string[], name: string): string | undefined {
   for (const arg of args) {
@@ -54,6 +55,7 @@ try {
 }
 
 const kv = await Deno.openKv();
+const emit = createEmitter(cfg.monitorUrl || undefined, cfg.bearerToken);
 const store = new ContextStore(kv);
 const threads = new ThreadStore(kv);
 const sessions = new SessionStore(kv);
@@ -79,6 +81,7 @@ const handlers = buildHandlers({
   registry,
   selfName: agentName,
   // Spawned agents cannot spawn further agents — no spawnAgent/availableRoles.
+  emit,
 });
 
 const handle = await startAgent({
@@ -86,6 +89,7 @@ const handle = await startAgent({
   bearerToken: cfg.bearerToken,
   handler: handlers.handler,
   streamHandler: handlers.streamHandler,
+  emit,
 });
 await registry.register(handle.card);
 console.log(`[${agentName}] ${handle.card.url} (${model})  registered with ${registryUrl}`);

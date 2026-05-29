@@ -7,7 +7,7 @@ import type { RegistryClient } from "../../src/registry/client.ts";
 import type { AgentHandlerCtx } from "../../src/agent/base.ts";
 
 function ctx(text: string, contextId: string): AgentHandlerCtx {
-  return { depth: 0, message: { messageId: "m", role: "user", parts: [{ type: "text", text }], contextId } };
+  return { depth: 0, sessionId: "", requestId: "", message: { messageId: "m", role: "user", parts: [{ type: "text", text }], contextId } };
 }
 
 async function makeDeps() {

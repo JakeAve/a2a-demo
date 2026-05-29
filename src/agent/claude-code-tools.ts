@@ -1,6 +1,6 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import { getTools, runTool, type ToolDeps } from "./tools.ts";
+import { getTools, runTool, type EmitIds, type ToolDeps } from "./tools.ts";
 
 export type ToolRunner = (
   deps: ToolDeps,
@@ -8,6 +8,7 @@ export type ToolRunner = (
   args: Record<string, unknown>,
   depth: number,
   parentContextId: string,
+  ids?: EmitIds,
 ) => Promise<string>;
 
 // zod input shapes mirroring the parameter schemas in tools.ts.
@@ -46,9 +47,10 @@ export function makeToolHandler(
   depth: number,
   contextId: string,
   run: ToolRunner = runTool,
+  ids?: EmitIds,
 ) {
   return async (args: Record<string, unknown>) => {
-    const text = await run(deps, name, args ?? {}, depth, contextId);
+    const text = await run(deps, name, args ?? {}, depth, contextId, ids);
     return { content: [{ type: "text" as const, text }] };
   };
 }
@@ -59,9 +61,10 @@ export function buildA2aMcpServer(
   depth: number,
   contextId: string,
   run: ToolRunner = runTool,
+  ids?: EmitIds,
 ) {
   const tools = getTools(deps).map((t) =>
-    tool(t.name, t.description, SHAPES[t.name], makeToolHandler(deps, t.name, depth, contextId, run))
+    tool(t.name, t.description, SHAPES[t.name], makeToolHandler(deps, t.name, depth, contextId, run, ids))
   );
   return createSdkMcpServer({ name: "a2a", version: "1.0.0", tools });
 }
