@@ -123,6 +123,27 @@ Run any of them with:
 (The `REGISTRY_PORT=0` lets them use an OS-assigned port so they don't
 conflict with a running orchestrator on 7890.)
 
+## Web UI monitor (optional)
+
+Visualize a run as a swimlane diagram. The monitor is a standalone service;
+the app works exactly the same with it off.
+
+```
+# terminal 1 — start the monitor
+deno task monitor                       # http://localhost:7891
+
+# terminal 2 — point agents at it
+A2A_MONITOR_URL=http://localhost:7891 \
+  deno task start --agents="coordinator,scout,analyst"
+```
+
+Open http://localhost:7891, pick a session, and watch delegations stream in.
+With `A2A_MONITOR_URL` unset, no events are emitted and behavior is unchanged.
+
+Config: `MONITOR_PORT` (default 7891), `MONITOR_KV_PATH` (default
+`./a2a-monitor.db`), and `AGENT_BEARER_TOKEN` (optional shared secret on
+`/ingest`). See `docs/superpowers/specs/2026-05-28-web-ui-monitor-design.md`.
+
 ## Configuration
 
 `.env` (see `.env.example`):
@@ -133,6 +154,7 @@ conflict with a running orchestrator on 7890.)
 | `ANTHROPIC_API_KEY` | — | Required for any Claude-backed agent |
 | `AGENT_BEARER_TOKEN` | `local-dev-secret` | Shared secret on all A2A calls |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Where to find Ollama |
+| `A2A_MONITOR_URL` | *(unset — monitor disabled)* | Point agents at a running monitor for swimlane tracing |
 
 ## Design + roadmap
 
