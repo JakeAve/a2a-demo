@@ -20,6 +20,7 @@ async function routeSessions() {
         <td>${s.status}</td></tr>`).join("")
     }</tbody></table>`;
 
+  if (routeSessions._es) routeSessions._es.close(); // avoid leaking on auto-refresh
   const es = new EventSource("/stream?session=*");
   es.onmessage = () => { routeSessions._dirty = true; };
   clearInterval(routeSessions._timer);
@@ -34,6 +35,7 @@ async function routeSessions() {
 
 function router() {
   if (routeSessions._es) { routeSessions._es.close(); routeSessions._es = null; }
+  clearInterval(routeSessions._timer); // stop list polling when leaving the list route
   const m = location.hash.match(/^#\/session\/(.+)$/);
   if (m) return renderSwimlane(view, crumb, m[1]);
   return routeSessions();
