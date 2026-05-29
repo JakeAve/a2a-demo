@@ -22,22 +22,26 @@ export type RoomBrokerConfig = {
 
 export type RoomBrokerHandle = { port: number; url: string; shutdown(): Promise<void> };
 
-const defaultPush: PushFn = async (url, delivery) => {
-  try {
-    const res = await fetch(`${url}/inbox`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify(delivery),
-    });
-    const ok = res.status === 202 || res.ok;
-    await res.body?.cancel();
-    return ok;
-  } catch { return false; }
-};
+function makeDefaultPush(token: string): PushFn {
+  return async (url, delivery) => {
+    try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (token) headers["authorization"] = `Bearer ${token}`;
+      const res = await fetch(`${url}/inbox`, {
+        method: "POST", headers,
+        body: JSON.stringify(delivery),
+      });
+      const ok = res.status === 202 || res.ok;
+      await res.body?.cancel();
+      return ok;
+    } catch { return false; }
+  };
+}
 
 export function startRoomBroker(cfg: RoomBrokerConfig): Promise<RoomBrokerHandle> {
   const now = cfg.now ?? (() => Date.now());
   const store = new RoomStore(cfg.kv, now);
-  const push = cfg.push ?? defaultPush;
+  const push = cfg.push ?? makeDefaultPush(cfg.token);
   const emit: EmitFn = cfg.emit ?? (() => Promise.resolve());
   const app = new Hono();
 
