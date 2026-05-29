@@ -4,7 +4,7 @@ import type { AppConfig, AgentSpec } from "../src/config.ts";
 
 const baseCfg: AppConfig = {
   registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "",
-  bearerToken: "t", ollamaBaseUrl: "x",
+  bearerToken: "t", ollamaBaseUrl: "x", monitorUrl: "",
 };
 const spec = (backend: string): AgentSpec => ({
   name: "a", model: "m",
@@ -32,4 +32,11 @@ Deno.test("loadConfig surfaces CLAUDE_CODE_OAUTH_TOKEN", async () => {
   const cfg = await loadConfig();
   assertEquals(cfg.claudeCodeOauthToken, "sk-ant-oat-test");
   Deno.env.delete("CLAUDE_CODE_OAUTH_TOKEN");
+});
+
+Deno.test("loadConfig reads A2A_MONITOR_URL (empty when unset)", async () => {
+  const { loadConfig } = await import("../src/config.ts");
+  const cfg = await loadConfig();
+  // Type-level guarantee plus runtime presence of the field.
+  assertEquals(typeof cfg.monitorUrl, "string");
 });

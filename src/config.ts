@@ -7,6 +7,7 @@ export type AppConfig = {
   claudeCodeOauthToken: string;
   bearerToken: string;
   ollamaBaseUrl: string;
+  monitorUrl: string; // empty string = disabled
 };
 
 export type AgentSpec = {
@@ -24,6 +25,7 @@ export async function loadConfig(): Promise<AppConfig> {
     claudeCodeOauthToken: env.CLAUDE_CODE_OAUTH_TOKEN ?? "",
     bearerToken: env.AGENT_BEARER_TOKEN ?? "local-dev-secret",
     ollamaBaseUrl: env.OLLAMA_BASE_URL ?? "http://localhost:11434",
+    monitorUrl: env.A2A_MONITOR_URL ?? "",
   };
 }
 
