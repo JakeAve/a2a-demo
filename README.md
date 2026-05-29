@@ -152,6 +152,39 @@ Config: `MONITOR_PORT` (default 7891), `MONITOR_KV_PATH` (default
 `./a2a-monitor.db`), and `AGENT_BEARER_TOKEN` (optional shared secret on
 `/ingest`). See `docs/superpowers/specs/2026-05-28-web-ui-monitor-design.md`.
 
+## MCP server (drive A2A from Claude Code)
+
+Expose the orchestrator as an MCP server over stdio, so Claude Code (or any MCP
+client) can call A2A agents through the raw delegation tools — instead of the
+`@agent` REPL.
+
+```
+deno task mcp --agents="coordinator,scout,analyst"
+```
+
+This boots a self-contained orchestrator (registry + the named agents) and
+serves MCP on stdin/stdout. It is the sole orchestrator for its registry/KV
+while running — don't run `deno task start` against the same registry port
+(`REGISTRY_PORT`, default 7890) or default Deno KV at the same time.
+
+Register it with Claude Code:
+
+```
+claude mcp add a2a -- deno run -A --unstable-kv --env-file=.env \
+  /abs/path/to/a2a/src/mcp.ts --agents="coordinator,scout,analyst"
+```
+
+The client sees the raw A2A surface as MCP tools: `list_agents`,
+`list_my_threads`, `delegate_start`, `delegate_continue`, `reset_thread`, and
+(when an orchestrator-backed spawn closure is present, which it always is here)
+`spawn_agent` / `list_roles`. The client is the depth-0 driver, so its
+`delegate_*` calls reach peers at depth 1 — identical to the REPL. With
+`A2A_MONITOR_URL` set, MCP-driven runs appear in the swimlane monitor under the
+`mcp` lane.
+
+Note: tool calls are blocking request/response — `delegate_*` returns the peer's
+final text (no token streaming over MCP).
+
 ## Configuration
 
 `.env` (see `.env.example`):
@@ -170,8 +203,8 @@ Config: `MONITOR_PORT` (default 7891), `MONITOR_KV_PATH` (default
   (architecture, protocol, security, threading, spawning, etc.)
 - `docs/superpowers/plans/2026-05-28-a2a-prototype.md` — implementation
   plan (15 tasks, all done)
-- `TODO.md` — follow-ups: MCP wrapping, thread-browser CLI,
-  multi-machine, agent-card consolidation, others
+- `TODO.md` — follow-ups: thread-browser CLI, multi-machine,
+  agent-card consolidation, others
 
 ## Claude backends & cost
 

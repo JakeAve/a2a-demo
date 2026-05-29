@@ -3,21 +3,6 @@
 Follow-ups deferred from the prototype scope. Each is independent;
 implement in any order.
 
-## MCP wrapping
-
-Expose the orchestrator as an MCP server so Claude Code (or any MCP
-client) can invoke A2A agents as tools.
-
-- New entry point that speaks MCP over stdio.
-- Tools mirror the A2A surface: `delegate_start`, `delegate_continue`,
-  `list_agents`, `list_my_threads`, `spawn_agent`, `reset_thread`.
-- Optionally reuses the existing orchestrator process — MCP just bridges
-  stdin/stdout to the in-process registry + tool runner.
-
-**Rough scope:** 100-150 lines. The `@modelcontextprotocol/sdk` npm
-package handles the framing. Most work is mapping each MCP tool call
-to the existing `runTool` in `src/agent/tools.ts`.
-
 ## Thread browser CLI
 
 A read-only inspector for ThreadStore so you can audit what an agent
