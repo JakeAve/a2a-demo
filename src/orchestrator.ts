@@ -11,6 +11,7 @@ import { buildHandlers } from "./agent/handlers.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 import { createEmitter } from "./observability/emit.ts";
+import type { Emitter } from "./observability/emit.ts";
 
 // Wait until the registry has an entry for `name`, or give up.
 async function waitForRegistration(
@@ -26,11 +27,32 @@ async function waitForRegistration(
   return false;
 }
 
-export async function runOrchestrator(
+export type OrchestratorContext = {
+  registryClient: RegistryClient;
+  store: ContextStore;
+  threads: ThreadStore;
+  agents: Map<string, AgentCard>;
+  spawnAgent: (role: string, name?: string, model?: string) => Promise<SpawnResult>;
+  availableRoles: () => Array<{ name: string; description: string; backend: string; defaultModel: string }>;
+  emit: Emitter;
+  bearerToken: string;
+  registryPort: number;
+  /** Idempotent cleanup: deregister + kill children + shut down agents/registry + close KV. Does NOT exit the process. */
+  shutdown: () => Promise<void>;
+};
+
+export type SetupOpts = {
+  /** stdio mode for spawned child agents. "null" suppresses their stdout (use in MCP mode). Default "inherit". */
+  childStdout?: "inherit" | "null";
+};
+
+export async function setupOrchestrator(
   cfg: AppConfig,
   specs: AgentSpec[],
   roles: Record<string, RolePreset>,
-): Promise<void> {
+  opts: SetupOpts = {},
+): Promise<OrchestratorContext> {
+  const childStdout = opts.childStdout ?? "inherit";
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
   const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
   const kv = await Deno.openKv();
@@ -50,7 +72,6 @@ export async function runOrchestrator(
   const handles: AgentHandle[] = [];
   const children = new Map<string, Deno.ChildProcess>();
 
-  // Capability exposed to Claude-backed agents so they can spawn peers.
   const availableRoles = () =>
     Object.entries(roles).map(([name, r]) => ({
       name,
@@ -87,7 +108,7 @@ export async function runOrchestrator(
     try {
       const child = new Deno.Command(Deno.execPath(), {
         args,
-        stdout: "inherit",
+        stdout: childStdout,
         stderr: "inherit",
       }).spawn();
       children.set(name, child);
@@ -155,9 +176,7 @@ export async function runOrchestrator(
     shuttingDown = true;
     console.log("\nshutting down...");
     for (const [name, child] of children) {
-      try {
-        await registryClient.deregister(name);
-      } catch { /* ignore */ }
+      try { await registryClient.deregister(name); } catch { /* ignore */ }
       try { child.kill("SIGTERM"); } catch { /* ignore */ }
     }
     for (const h of handles) {
@@ -166,10 +185,36 @@ export async function runOrchestrator(
     }
     try { await registry.shutdown(); } catch { /* ignore */ }
     kv.close();
-    Deno.exit(0);
   };
-  Deno.addSignalListener("SIGINT", shutdown);
 
-  await runRepl({ agents, bearerToken: cfg.bearerToken, emit });
-  await shutdown();
+  return {
+    registryClient,
+    store,
+    threads,
+    agents,
+    spawnAgent,
+    availableRoles,
+    emit,
+    bearerToken: cfg.bearerToken,
+    registryPort: registry.port,
+    shutdown,
+  };
+}
+
+export async function runOrchestrator(
+  cfg: AppConfig,
+  specs: AgentSpec[],
+  roles: Record<string, RolePreset>,
+): Promise<void> {
+  const ctx = await setupOrchestrator(cfg, specs, roles);
+  let signalFired = false;
+  Deno.addSignalListener("SIGINT", () => {
+    signalFired = true;
+    ctx.shutdown().then(() => Deno.exit(0));
+  });
+  await runRepl({ agents: ctx.agents, bearerToken: ctx.bearerToken, emit: ctx.emit });
+  if (!signalFired) {
+    await ctx.shutdown();
+    Deno.exit(0);
+  }
 }

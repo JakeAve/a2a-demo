@@ -46,6 +46,16 @@ export function assertBackendCredentials(specs: AgentSpec[], cfg: AppConfig): vo
   }
 }
 
+/** Parse the --agents flag (`--agents=a,b` or `--agents a,b`); default "coordinator,scout". */
+export function getAgentsFlag(args: string[]): string {
+  for (const arg of args) {
+    if (arg.startsWith("--agents=")) return arg.slice("--agents=".length);
+  }
+  const i = args.indexOf("--agents");
+  if (i !== -1 && args[i + 1]) return args[i + 1];
+  return "coordinator,scout";
+}
+
 // Parse "coordinator,scout:gemma3:1b,code-reviewer" → AgentSpec[]
 // Splits on the FIRST colon only so model tags like "gemma3:1b" survive.
 export function parseAgentsFlag(
