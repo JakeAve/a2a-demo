@@ -3,6 +3,8 @@ import type { AgentCard } from "./protocol/types.ts";
 import type { Emitter } from "./observability/emit.ts";
 import { now } from "./observability/emit.ts";
 import type { InboxDelivery } from "./rooms/types.ts";
+import { Hono } from "hono";
+import { InboxQueue } from "./agent/inbox.ts";
 
 // ---- Pure line classification (no I/O, unit-tested) ----
 
@@ -98,6 +100,47 @@ export function classifyLine(raw: string, opts: ClassifyOpts): Classified {
 export function formatDelivery(d: InboxDelivery): string {
   const text = d.transcript.at(-1)?.text ?? "";
   return `[room: ${d.title}] ${d.addressedBy} → you: ${text}`;
+}
+
+// ---- REPL inbox server ----
+
+export type ReplInboxHandle = {
+  url: string;
+  port: number;
+  shutdown: () => Promise<void>;
+  drain: () => Promise<void>;
+};
+
+// A tiny /inbox server. Mirrors the agent inbox contract: bearer-authed,
+// returns 202 immediately, deliveries drained one-at-a-time so prints stay
+// ordered and the broker is never blocked.
+export function startReplInbox(opts: {
+  token: string;
+  port?: number;
+  onDelivery: (d: InboxDelivery) => void;
+}): ReplInboxHandle {
+  const app = new Hono();
+  const queue = new InboxQueue<InboxDelivery>((d) => {
+    opts.onDelivery(d);
+    return Promise.resolve();
+  });
+  app.post("/inbox", async (c) => {
+    // Empty token disables auth (matches the broker's convention in rooms/server.ts).
+    const authz = c.req.header("authorization") ?? "";
+    if (opts.token && authz !== `Bearer ${opts.token}`) return c.json({ error: "unauthorized" }, 401);
+    let body: unknown;
+    try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
+    queue.enqueue(body as InboxDelivery);
+    return c.json({ ok: true }, 202);
+  });
+  const server = Deno.serve({ port: opts.port ?? 0, onListen: () => {} }, app.fetch);
+  const port = (server.addr as Deno.NetAddr).port;
+  return {
+    url: `http://localhost:${port}`,
+    port,
+    shutdown: () => server.shutdown(),
+    drain: () => queue.drain(),
+  };
 }
 
 export type ReplDeps = {
