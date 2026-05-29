@@ -15,6 +15,16 @@ export const EVENT_TYPES = [
   "turn.completed",
   "error",
   "request.completed",
+  "room.created",
+  "room.invited",
+  "room.post",
+  "room.ack",
+  "room.left",
+  "room.idle",
+  "room.capped",
+  "room.turn_timeout",
+  "room.delivery_failed",
+  "room.closed",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
@@ -29,6 +39,7 @@ export const EventSchema = z.object({
   agent: z.string().min(1),
   depth: z.number().int().nonnegative(),
   threadId: z.string().optional(),
+  roomId: z.string().optional(),
   type: z.enum(EVENT_TYPES),
   data: z.record(z.string(), z.unknown()).default({}),
 });
