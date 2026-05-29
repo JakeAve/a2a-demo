@@ -1,75 +1,94 @@
 // monitor/store.ts
-// KV-backed persistence for A2A monitor events.
-import type { A2AEvent, EmitEvent } from "../src/observability/events.ts";
+// Persistence for the monitor. Owns its OWN Deno KV (never the agents' KV).
+// Assigns the authoritative `seq` on ingest and maintains a per-session
+// summary so the sessions list never scans all events.
+import { type A2AEvent, type EmitEvent, parseEvent } from "../src/observability/events.ts";
 
 export type SessionSummary = {
   sessionId: string;
-  firstTs: number;
-  lastTs: number;
-  eventCount: number;
+  startedAt: number;
+  lastEventAt: number;
+  agents: string[];
+  requestCount: number;
+  lastSeq: number;
+  status: "active" | "done";
 };
 
-/**
- * Key layout:
- *   ["event", sessionId, seq]  -> A2AEvent
- *   ["session", sessionId]     -> SessionSummary
- *   ["seq"]                    -> number (global monotonic counter)
- */
 export class MonitorStore {
-  #kv: Deno.Kv;
+  // In-memory next-seq cache per session; rehydrated from KV on miss.
+  #nextSeq = new Map<string, number>();
 
-  constructor(kv: Deno.Kv) {
-    this.#kv = kv;
+  constructor(private kv: Deno.Kv) {}
+
+  async #seqFor(sessionId: string): Promise<number> {
+    const cached = this.#nextSeq.get(sessionId);
+    if (cached !== undefined) return cached;
+    const summary = await this.kv.get<SessionSummary>(["session", sessionId]);
+    const next = summary.value ? summary.value.lastSeq + 1 : 0;
+    this.#nextSeq.set(sessionId, next);
+    return next;
   }
 
-  async ingest(raw: EmitEvent): Promise<A2AEvent> {
-    // Atomically bump the global seq counter and write the event.
-    const seqKey = ["seq"];
-    let seq = 0;
-    while (true) {
-      const entry = await this.#kv.get<number>(seqKey);
-      seq = (entry.value ?? 0) + 1;
-      const event: A2AEvent = { ...raw, seq };
+  async ingest(input: EmitEvent | A2AEvent): Promise<A2AEvent> {
+    const seq = await this.#seqFor(input.sessionId);
+    const event = parseEvent({ ...input, seq });
+    this.#nextSeq.set(event.sessionId, seq + 1);
 
-      // Read current session summary (may not exist yet).
-      const sumKey = ["session", raw.sessionId];
-      const sumEntry = await this.#kv.get<SessionSummary>(sumKey);
-      const prev = sumEntry.value;
-      const summary: SessionSummary = {
-        sessionId: raw.sessionId,
-        firstTs: prev?.firstTs ?? raw.ts,
-        lastTs: raw.ts,
-        eventCount: (prev?.eventCount ?? 0) + 1,
-      };
-
-      const res = await this.#kv.atomic()
-        .check(entry) // guard on seq
-        .check(sumEntry) // guard on summary
-        .set(seqKey, seq)
-        .set(["event", raw.sessionId, seq], event)
-        .set(sumKey, summary)
-        .commit();
-
-      if (res.ok) return event;
-      // Retry if CAS failed (another concurrent ingest).
-    }
+    await this.kv.set(["evt", event.sessionId, event.requestId, seq], event);
+    await this.#updateSummary(event);
+    return event;
   }
 
-  async listSessions(): Promise<SessionSummary[]> {
-    const results: SessionSummary[] = [];
-    const iter = this.#kv.list<SessionSummary>({ prefix: ["session"] });
-    for await (const entry of iter) {
-      results.push(entry.value);
-    }
-    return results;
+  async #updateSummary(event: A2AEvent): Promise<void> {
+    const key = ["session", event.sessionId];
+    const cur = (await this.kv.get<SessionSummary>(key)).value;
+    const agents = new Set(cur?.agents ?? []);
+    if (event.agent) agents.add(event.agent);
+    const summary: SessionSummary = {
+      sessionId: event.sessionId,
+      startedAt: cur?.startedAt ?? event.ts,
+      lastEventAt: event.ts,
+      agents: [...agents],
+      requestCount: await this.#countRequests(event),
+      lastSeq: event.seq,
+      status: "active",
+    };
+    await this.kv.set(key, summary);
+  }
+
+  // Count distinct requestIds by recording each on first sight, then scanning.
+  async #countRequests(event: A2AEvent): Promise<number> {
+    const reqKey = ["session_req", event.sessionId, event.requestId];
+    if (!(await this.kv.get(reqKey)).value) await this.kv.set(reqKey, 1);
+    let count = 0;
+    for await (const _ of this.kv.list({ prefix: ["session_req", event.sessionId] })) count++;
+    return count;
   }
 
   async getSessionEvents(sessionId: string): Promise<A2AEvent[]> {
-    const results: A2AEvent[] = [];
-    const iter = this.#kv.list<A2AEvent>({ prefix: ["event", sessionId] });
-    for await (const entry of iter) {
-      results.push(entry.value);
+    const out: A2AEvent[] = [];
+    for await (const entry of this.kv.list<A2AEvent>({ prefix: ["evt", sessionId] })) {
+      out.push(entry.value);
     }
-    return results;
+    out.sort((a, b) => a.seq - b.seq);
+    return out;
+  }
+
+  async getRequestEvents(sessionId: string, requestId: string): Promise<A2AEvent[]> {
+    const out: A2AEvent[] = [];
+    for await (const entry of this.kv.list<A2AEvent>({ prefix: ["evt", sessionId, requestId] })) {
+      out.push(entry.value);
+    }
+    out.sort((a, b) => a.seq - b.seq);
+    return out;
+  }
+
+  async listSessions(): Promise<SessionSummary[]> {
+    const out: SessionSummary[] = [];
+    for await (const entry of this.kv.list<SessionSummary>({ prefix: ["session"] })) {
+      out.push(entry.value);
+    }
+    out.sort((a, b) => b.lastEventAt - a.lastEventAt);
+    return out;
   }
 }
