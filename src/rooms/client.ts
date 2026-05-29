@@ -47,6 +47,17 @@ export class RoomBrokerClient {
     await res.body?.cancel();
   }
 
+  async join(
+    roomId: string,
+    body: { name: string; inboxUrl: string; kind?: "agent" | "human" },
+  ): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/rooms/${encodeURIComponent(roomId)}/join`, {
+      method: "POST", headers: this.#headers(), body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`join failed: ${res.status} ${await res.text()}`);
+    await res.body?.cancel();
+  }
+
   async leave(roomId: string, agent: string): Promise<void> {
     const res = await fetch(`${this.baseUrl}/rooms/${encodeURIComponent(roomId)}/leave`, {
       method: "POST", headers: this.#headers(), body: JSON.stringify({ agent }),

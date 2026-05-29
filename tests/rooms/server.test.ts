@@ -108,3 +108,40 @@ Deno.test("creator can post in a room it created without being listed in members
   assertEquals(pushed.at(-1)?.addressedBy, "Alvy"); // delivery went to Bex
   await broker.shutdown(); kv.close();
 });
+
+Deno.test("join adds a human member who then receives pushed deliveries", async () => {
+  const kv = await Deno.openKv(":memory:");
+  const pushedTo: Array<{ url: string; delivery: InboxDelivery }> = [];
+  const inboxes: Record<string, string> = { Alvy: "http://alvy" };
+  const broker = await startRoomBroker({
+    kv, port: 0, token: "tok",
+    resolveInbox: (name) => Promise.resolve(inboxes[name] ?? null),
+    push: (url, d) => { pushedTo.push({ url, delivery: d }); return Promise.resolve(true); },
+    agentDeadlineMs: 1000, humanDeadlineMs: 1000, defaultMaxTurns: 24, sweepIntervalMs: 0,
+  });
+  const base = broker.url;
+  const h = { "content-type": "application/json", "authorization": "Bearer tok" };
+
+  const created = await (await fetch(`${base}/rooms`, {
+    method: "POST", headers: h,
+    body: JSON.stringify({ title: "t", members: ["Alvy"], createdBy: "Alvy", sessionId: "s1" }),
+  })).json();
+  const roomId = created.roomId;
+
+  const joinRes = await fetch(`${base}/rooms/${roomId}/join`, {
+    method: "POST", headers: h,
+    body: JSON.stringify({ name: "human", inboxUrl: "http://repl" }),
+  });
+  assertEquals(joinRes.status, 200);
+  await joinRes.body?.cancel();
+
+  await fetch(`${base}/rooms/${roomId}/post`, {
+    method: "POST", headers: h,
+    body: JSON.stringify({ from: "Alvy", text: "hi human", to: ["human"] }),
+  });
+
+  assertEquals(pushedTo.length, 1);
+  assertEquals(pushedTo[0].url, "http://repl");
+  assertEquals(pushedTo[0].delivery.addressedBy, "Alvy");
+  await broker.shutdown(); kv.close();
+});

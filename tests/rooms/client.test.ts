@@ -37,3 +37,18 @@ Deno.test("post sends from/text/to/turnId", async () => {
   assertEquals(res.seq, 3);
   assertEquals(captured, { from: "Bex", text: "hi", to: ["Alvy"], turnId: "T1" });
 });
+
+Deno.test("join POSTs name/inboxUrl/kind", async () => {
+  let captured: unknown;
+  let capturedUrl = "";
+  const restore = stubFetch((url, init) => {
+    capturedUrl = url;
+    captured = JSON.parse(String(init.body));
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  });
+  const client = new RoomBrokerClient("http://broker", "tok");
+  await client.join("r1", { name: "human", inboxUrl: "http://repl:5000" });
+  restore();
+  assertEquals(capturedUrl, "http://broker/rooms/r1/join");
+  assertEquals(captured, { name: "human", inboxUrl: "http://repl:5000" });
+});

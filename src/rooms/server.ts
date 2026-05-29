@@ -160,6 +160,21 @@ export function startRoomBroker(cfg: RoomBrokerConfig): Promise<RoomBrokerHandle
     return c.json({ ok: true });
   });
 
+  app.post("/rooms/:id/join", async (c) => {
+    if (!auth(c)) return c.json({ error: "unauthorized" }, 401);
+    const roomId = c.req.param("id");
+    const body = await c.req.json();
+    const room = await store.getRoom(roomId);
+    if (!room) return c.json({ error: "unknown room" }, 404);
+    const name = String(body.name ?? "");
+    const inboxUrl = String(body.inboxUrl ?? "");
+    if (!name || !inboxUrl) return c.json({ error: "name and inboxUrl required" }, 400);
+    const kind = body.kind === "agent" ? "agent" : "human";
+    await store.addMember(roomId, { name, inboxUrl, kind });
+    ev(room.sessionId, roomId, name, "room.invited", { agent: name });
+    return c.json({ ok: true });
+  });
+
   app.post("/rooms/:id/leave", async (c) => {
     if (!auth(c)) return c.json({ error: "unauthorized" }, 401);
     const roomId = c.req.param("id");
