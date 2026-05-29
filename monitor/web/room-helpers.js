@@ -32,8 +32,10 @@ export function roomBadgeLabel(event) {
   }
 }
 
-// Expand `to` against the current member set. Returns concrete recipient names,
-// excluding the sender (`from`). The `"*"` wildcard is expanded to all members.
+// Expand `to` to a concrete list of recipients.
+// If `to` is exactly `["*"]`, expands to all members except the sender.
+// For named lists, filters out `"*"` tokens and the sender; does NOT
+// validate names against memberSet (callers own that guard).
 export function expandRoomTo(to, from, memberSet) {
   if (to.length === 1 && to[0] === "*") return [...memberSet].filter(n => n !== from);
   return to.filter(n => n !== "*" && n !== from);

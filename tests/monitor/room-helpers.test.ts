@@ -23,9 +23,10 @@ Deno.test("expandRoomTo returns named recipients filtered to non-sender non-wild
   assertEquals(expandRoomTo(["Bex", "human"], "Alvy", members), ["Bex", "human"]);
 });
 
-Deno.test("expandRoomTo skips * tokens in named lists and excludes self", () => {
-  const members = new Set(["Alvy", "Bex"]);
-  assertEquals(expandRoomTo(["Alvy", "*"], "Alvy", members), []);
+Deno.test("expandRoomTo skips * token in named list, keeps other recipients", () => {
+  const members = new Set(["Alvy", "Bex", "Cal"]);
+  // "Bex" should be kept; "*" should be treated as a literal token and dropped
+  assertEquals(expandRoomTo(["Bex", "*"], "Alvy", members), ["Bex"]);
 });
 
 Deno.test("expandRoomTo returns empty for empty to", () => {
