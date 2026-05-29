@@ -118,7 +118,7 @@ export async function runOrchestrator(
         security: [{ bearer: [] }],
       };
 
-      const handlers = buildHandlers({
+      const handlers = await buildHandlers({
         model: spec.model,
         preset: spec.preset,
         cfg,

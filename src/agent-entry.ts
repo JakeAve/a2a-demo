@@ -74,7 +74,7 @@ const baseCard: AgentCard = {
   security: [{ bearer: [] }],
 };
 
-const handlers = buildHandlers({
+const handlers = await buildHandlers({
   model,
   preset,
   cfg,

@@ -10,8 +10,13 @@ import type { ToolDeps } from "./tools.ts";
 import type { Emitter } from "../observability/emit.ts";
 import { selectSearchProvider } from "./web-search.ts";
 import { makeClaudeHandlers } from "./claude.ts";
-import { makeClaudeCodeHandlers } from "./claude-code.ts";
 import { makeOllamaHandlers } from "./ollama.ts";
+// NOTE: claude-code.ts is imported lazily inside buildHandlers (not at module
+// top) because it pulls in @anthropic-ai/claude-agent-sdk, which calls
+// os.homedir() at import time and so requires --allow-sys. Only claude-code
+// agents get that permission; a static import here would crash every Ollama /
+// claude agent on boot (they'd never register). Loading it on demand keeps
+// their permission set minimal and skips the heavy SDK init they never use.
 
 export type Handlers = {
   handler: (ctx: AgentHandlerCtx) => Promise<{ text: string }>;
@@ -32,7 +37,7 @@ export type BuildHandlersDeps = {
   emit?: Emitter;
 };
 
-export function buildHandlers(d: BuildHandlersDeps): Handlers {
+export async function buildHandlers(d: BuildHandlersDeps): Promise<Handlers> {
   const { preset, cfg } = d;
   if (preset.backend === "claude") {
     return makeClaudeHandlers({
@@ -43,6 +48,7 @@ export function buildHandlers(d: BuildHandlersDeps): Handlers {
     });
   }
   if (preset.backend === "claude-code") {
+    const { makeClaudeCodeHandlers } = await import("./claude-code.ts");
     return makeClaudeCodeHandlers({
       model: d.model, systemPrompt: preset.systemPrompt,
       oauthToken: cfg.claudeCodeOauthToken, apiKey: cfg.anthropicApiKey,
