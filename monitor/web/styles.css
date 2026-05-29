@@ -1,6 +1,7 @@
 /* monitor/web/styles.css */
 :root { color-scheme: dark; --bg:#0d0d0f; --fg:#e8e8ea; --mut:#9aa; --line:#333;
-  --repl:#888; --coord:#2e6fff; --del:#e0a030; --ret:#7fd17f; }
+  --repl:#888; --coord:#2e6fff; --del:#e0a030; --ret:#7fd17f;
+  --room:#a78bfa; --room-badge:#7c5fbf; }
 * { box-sizing: border-box; }
 html, body { height:100%; }
 body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.4 ui-sans-serif,system-ui,sans-serif;

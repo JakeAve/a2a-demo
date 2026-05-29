@@ -1,8 +1,10 @@
 // monitor/web/swimlane.js
 import { computeLayout } from "/layout.js";
+import { roomBadgeLabel, roomPostLabel } from "./room-helpers.js";
 
 const COLOR = { request: "var(--repl)", delegate: "var(--del)", continue: "var(--del)",
-  return: "var(--ret)", final: "var(--ret)", self: "var(--del)", error: "#e05555" };
+  return: "var(--ret)", final: "var(--ret)", self: "var(--del)", error: "#e05555",
+  room: "var(--room)", "room-self": "var(--room)", "room-badge": "var(--room-badge)" };
 
 const HEAD = 44; // height of the sticky lane-name bar
 
@@ -39,6 +41,7 @@ function preview(e) {
     case "tool.call": return d.tool ?? "";
     case "spawn": return d.name ?? d.role ?? "";
     case "error": return d.message ?? "error";
+    case "room.post": return d.text ?? "";
     default: return e.type;
   }
 }
@@ -72,13 +75,16 @@ export async function renderSwimlane(view, crumb, sessionId) {
         // Self-loop (tool call / spawn / error): a small lobe with its label.
         const d = a.event.data ?? {};
         const label = clip(
-          a.event.type === "tool.call" ? (d.tool ?? "tool")
-            : a.event.type === "spawn" ? `spawn ${d.name ?? d.role ?? ""}`.trim()
-            : a.event.type === "error" ? `error: ${d.message ?? ""}`
-            : a.event.type,
-          28);
+          a.kind === "room-badge" ? roomBadgeLabel(a.event)
+          : a.kind === "room-self" ? roomPostLabel(a.event)
+          : a.event.type === "tool.call" ? (d.tool ?? "tool")
+          : a.event.type === "spawn" ? `spawn ${d.name ?? d.role ?? ""}`.trim()
+          : a.event.type === "error" ? `error: ${d.message ?? ""}`
+          : a.event.type,
+          32);
+        const icon = (a.kind === "room-badge" || a.kind === "room-self") ? "⊙" : "·";
         return `<path d="M${x1},${a.y} q44,-6 44,8 q0,15 -44,8" fill="none" stroke="${color}" stroke-width="1.6" data-seq="${a.seq}" style="cursor:pointer"/>
-                <text x="${x1 + 52}" y="${a.y + 4}" class="${cls}" data-seq="${a.seq}" style="cursor:pointer">· ${esc(label)}</text>`;
+                <text x="${x1 + 52}" y="${a.y + 4}" class="${cls}" data-seq="${a.seq}" style="cursor:pointer">${icon} ${esc(label)}</text>`;
       }
       // Inter-lane message: line + arrowhead + an inline, ellipsized preview
       // centered above the wire so its content is legible at a glance.
@@ -129,7 +135,7 @@ export async function renderSwimlane(view, crumb, sessionId) {
       if (e) {
         document.getElementById("detail-body").innerHTML =
           `<strong>${esc(e.agent)} · ${esc(e.type)}</strong>
-           <div class="mut">seq ${e.seq} · depth ${e.depth}${e.threadId ? " · thread " + esc(e.threadId) : ""}</div>
+           <div class="mut">seq ${e.seq} · depth ${e.depth}${e.threadId ? " · thread " + esc(e.threadId) : ""}${e.roomId ? " · room " + esc(e.roomId) : ""}</div>
            ${Object.entries(e.data).map(([k, v]) =>
              `<div class="bubble"><span class="mut">${esc(k)}</span>\n${esc(pretty(v))}</div>`).join("")}`;
       }
