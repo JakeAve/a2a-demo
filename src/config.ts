@@ -10,6 +10,10 @@ export type AppConfig = {
   ollamaApiKey: string; // for Ollama's hosted web_search API (empty = no web search)
   monitorUrl: string; // empty string = disabled
   maxDepth: number; // 0 = peg to current agent count; >0 = fixed cap
+  roomBrokerPort: number;
+  roomMaxTurns: number;
+  agentDeadlineMs: number;
+  humanDeadlineMs: number;
 };
 
 export type AgentSpec = {
@@ -30,6 +34,10 @@ export async function loadConfig(): Promise<AppConfig> {
     ollamaApiKey: env.OLLAMA_API_KEY ?? "",
     monitorUrl: env.A2A_MONITOR_URL ?? "",
     maxDepth: Number(env.A2A_MAX_DEPTH ?? 0),
+    roomBrokerPort: Number(env.ROOM_BROKER_PORT ?? 7892),
+    roomMaxTurns: Number(env.A2A_ROOM_MAX_TURNS ?? 24),
+    agentDeadlineMs: Number(env.A2A_ROOM_AGENT_DEADLINE_MS ?? 120_000),
+    humanDeadlineMs: Number(env.A2A_ROOM_HUMAN_DEADLINE_MS ?? 3_600_000),
   };
 }
 

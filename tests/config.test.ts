@@ -5,6 +5,7 @@ import type { AppConfig, AgentSpec } from "../src/config.ts";
 const baseCfg: AppConfig = {
   registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "",
   bearerToken: "t", ollamaBaseUrl: "x", ollamaApiKey: "", monitorUrl: "", maxDepth: 0,
+  roomBrokerPort: 7892, roomMaxTurns: 24, agentDeadlineMs: 120_000, humanDeadlineMs: 3_600_000,
 };
 const spec = (backend: string): AgentSpec => ({
   name: "a", model: "m",
@@ -39,4 +40,12 @@ Deno.test("loadConfig reads A2A_MONITOR_URL (empty when unset)", async () => {
   const cfg = await loadConfig();
   // Type-level guarantee plus runtime presence of the field.
   assertEquals(typeof cfg.monitorUrl, "string");
+});
+
+Deno.test("loadConfig provides room defaults", async () => {
+  const cfg = await loadConfig();
+  assertEquals(cfg.roomBrokerPort, 7892);
+  assertEquals(cfg.roomMaxTurns, 24);
+  assertEquals(cfg.agentDeadlineMs, 120_000);
+  assertEquals(cfg.humanDeadlineMs, 3_600_000);
 });
