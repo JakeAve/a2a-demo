@@ -60,3 +60,42 @@ Deno.test("when the handler already posted, no wrap/ack happens", async () => {
   await proc(delivery());
   assertEquals(calls, []);
 });
+
+Deno.test("room-turn processor uses d.sessionId for ctx.sessionId when provided", async () => {
+  let capturedSessionId: string | undefined;
+  const roomTurn: RoomTurnState = { active: null };
+  const proc = makeRoomTurnProcessor({
+    selfName: "Bex",
+    handler: (ctx) => {
+      capturedSessionId = ctx.sessionId;
+      return Promise.resolve({ text: "" });
+    },
+    rooms: {
+      post: () => Promise.resolve({ seq: 0 }),
+      ack: () => Promise.resolve(),
+    } as never,
+    roomTurn, store,
+  });
+  const d: InboxDelivery = {
+    roomId: "r1", turnId: "T2", addressedBy: "Alvy", title: "t",
+    members: ["Alvy", "Bex"], transcript: [], sessionId: "session-xyz",
+  };
+  await proc(d);
+  assertEquals(capturedSessionId, "session-xyz");
+});
+
+Deno.test("room-turn processor falls back to empty sessionId when sessionId absent", async () => {
+  let capturedSessionId: string | undefined;
+  const roomTurn: RoomTurnState = { active: null };
+  const proc = makeRoomTurnProcessor({
+    selfName: "Bex",
+    handler: (ctx) => {
+      capturedSessionId = ctx.sessionId;
+      return Promise.resolve({ text: "" });
+    },
+    rooms: { post: () => Promise.resolve({ seq: 0 }), ack: () => Promise.resolve() } as never,
+    roomTurn, store,
+  });
+  await proc(delivery()); // delivery() has no sessionId field
+  assertEquals(capturedSessionId, "");
+});

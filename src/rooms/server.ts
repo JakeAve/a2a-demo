@@ -72,6 +72,7 @@ export function startRoomBroker(cfg: RoomBrokerConfig): Promise<RoomBrokerHandle
       const payload: InboxDelivery = {
         roomId, turnId: delivery.turnId, addressedBy: from,
         title: room.title, members: [...activeNames], transcript,
+        sessionId: room.sessionId,
       };
       const ok = await push(member.inboxUrl, payload);
       if (!ok) {

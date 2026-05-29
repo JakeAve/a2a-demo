@@ -39,7 +39,7 @@ export function makeRoomTurnProcessor(deps: RoomTurnDeps) {
     try {
       const ctx: AgentHandlerCtx = {
         depth: 0,
-        sessionId: "", // room events are emitted by the broker; agent turn events optional
+        sessionId: d.sessionId ?? "",
         requestId: d.roomId,
         message: {
           messageId: crypto.randomUUID(), role: "user",

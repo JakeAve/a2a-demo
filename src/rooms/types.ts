@@ -62,6 +62,7 @@ export type InboxDelivery = {
   title: string;
   members: string[];          // active member names
   transcript: TranscriptMessage[];
+  sessionId?: string;         // room's monitor session; enables agent turn events to flow
 };
 
 // Body of POST /rooms/:id/post
