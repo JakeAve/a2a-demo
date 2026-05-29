@@ -11,6 +11,7 @@ import {
   type SpawnResult,
   type ToolDeps,
 } from "./tools.ts";
+import type { Emitter } from "../observability/emit.ts";
 
 export type { SpawnResult };
 
@@ -25,6 +26,7 @@ export type ClaudeDeps = {
   selfName: string;
   spawnAgent?: ToolDeps["spawnAgent"];
   availableRoles?: ToolDeps["availableRoles"];
+  emit?: Emitter;
 };
 
 function userText(ctx: AgentHandlerCtx): string {
@@ -52,6 +54,7 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
     selfName: deps.selfName,
     spawnAgent: deps.spawnAgent,
     availableRoles: deps.availableRoles,
+    emit: deps.emit,
   };
   const tools = toAnthropicTools(toolDeps);
   const systemSuffix = buildSystemSuffix(toolDeps);
@@ -93,7 +96,9 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
         toolBlocks.map(async (tb) => ({
           type: "tool_result" as const,
           tool_use_id: tb.id,
-          content: await runTool(toolDeps, tb.name, tb.input, ctx.depth, contextId),
+          content: await runTool(toolDeps, tb.name, tb.input, ctx.depth, contextId, {
+            sessionId: ctx.sessionId, requestId: ctx.requestId,
+          }),
         })),
       );
       messages.push({ role: "user", content: toolResults as never });
