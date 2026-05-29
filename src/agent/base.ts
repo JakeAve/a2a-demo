@@ -3,6 +3,8 @@ import { type AgentCard, isMessage, type Message } from "../protocol/types.ts";
 import type { StreamEvent } from "../protocol/client.ts";
 import type { Emitter } from "../observability/emit.ts";
 import { now } from "../observability/emit.ts";
+import { InboxQueue } from "./inbox.ts";
+import type { InboxDelivery } from "../rooms/types.ts";
 
 export type AgentHandlerCtx = {
   depth: number;
@@ -21,6 +23,8 @@ export type AgentConfig = {
   maxDepth?: () => number | Promise<number>;
   handler: (ctx: AgentHandlerCtx) => Promise<{ text: string }>;
   streamHandler: (ctx: AgentHandlerCtx) => AsyncGenerator<StreamEvent>;
+  // Called once per inbox delivery, serialised. When omitted, /inbox returns 501.
+  onInbox?: (delivery: InboxDelivery) => Promise<void>;
 };
 
 export type AgentHandle = {
@@ -112,6 +116,18 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
     return new Response(stream, {
       headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
     });
+  });
+
+  const inbox = cfg.onInbox ? new InboxQueue(cfg.onInbox) : null;
+
+  app.post("/inbox", async (c) => {
+    const authz = c.req.header("authorization") ?? "";
+    if (authz !== `Bearer ${cfg.bearerToken}`) return c.json({ error: "unauthorized" }, 401);
+    if (!inbox) return c.json({ error: "agent has no inbox" }, 501);
+    let body: unknown;
+    try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
+    inbox.enqueue(body as InboxDelivery);
+    return c.json({ ok: true }, 202);
   });
 
   const server = Deno.serve({ port: 0, onListen: () => {} }, app.fetch);
