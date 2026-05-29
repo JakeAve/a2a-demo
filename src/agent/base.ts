@@ -15,6 +15,10 @@ export type AgentConfig = {
   card: AgentCard;
   bearerToken: string;
   emit?: Emitter; // optional; defaults to no-op
+  // Resolves the max delegation depth on each request. Defaults to a constant
+  // 2 (REPL→A→B). The orchestrator/agent-entry supply a resolver that pegs it
+  // to the current registered-agent count so the swarm can fan out deeper.
+  maxDepth?: () => number | Promise<number>;
   handler: (ctx: AgentHandlerCtx) => Promise<{ text: string }>;
   streamHandler: (ctx: AgentHandlerCtx) => AsyncGenerator<StreamEvent>;
 };
@@ -30,6 +34,7 @@ type Variables = { depth: number; sessionId: string; requestId: string };
 export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
   const app = new Hono<{ Variables: Variables }>();
   const emit: Emitter = cfg.emit ?? (() => Promise.resolve());
+  const resolveMaxDepth = cfg.maxDepth ?? (() => 2);
   const agent = cfg.card.name;
 
   let servedCard = cfg.card;
@@ -41,7 +46,8 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
       return c.json({ error: "unauthorized" }, 401);
     }
     const depth = Number(c.req.header("x-depth") ?? "0");
-    if (Number.isNaN(depth) || depth >= 2) {
+    const maxDepth = await resolveMaxDepth();
+    if (Number.isNaN(depth) || depth >= maxDepth) {
       return c.json({ error: "max delegation depth reached" }, 429);
     }
     c.set("depth", depth);

@@ -28,6 +28,29 @@ Deno.test("base agent: x-depth >= 2 returns 429", async () => {
   await agent.shutdown();
 });
 
+Deno.test("base agent: a higher maxDepth resolver allows deeper delegation", async () => {
+  const agent = await startAgent({
+    card,
+    bearerToken: "tok",
+    maxDepth: () => 4, // peg-to-agent-count would supply this dynamically
+    handler: async () => ({ text: "ok" }),
+    streamHandler: async function* () { yield { type: "done" }; },
+  });
+  const send = (d: string) =>
+    fetch(`http://localhost:${agent.port}/message/send`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer tok", "x-depth": d },
+      body: JSON.stringify({ message: { messageId: "1", role: "user", parts: [{ type: "text", text: "hi" }] } }),
+    });
+  const ok = await send("3"); // 3 < 4 → allowed (would be 429 under the old cap of 2)
+  assertEquals(ok.status, 200);
+  await ok.body?.cancel();
+  const blocked = await send("4"); // 4 >= 4 → rejected
+  assertEquals(blocked.status, 429);
+  await blocked.body?.cancel();
+  await agent.shutdown();
+});
+
 Deno.test("base agent: x-depth 0 and 1 allowed", async () => {
   const agent = await startAgent({
     card,
