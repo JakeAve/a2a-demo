@@ -16,6 +16,7 @@ Deno.test("buildHandlers returns handler + streamHandler for a claude-code prese
   const cfg: AppConfig = {
     registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "sk-oat",
     bearerToken: "t", ollamaBaseUrl: "x", ollamaApiKey: "", monitorUrl: "", maxDepth: 0,
+    roomBrokerPort: 7892, roomMaxTurns: 24, agentDeadlineMs: 120_000, humanDeadlineMs: 3_600_000,
   };
   const h = await buildHandlers({
     model: "claude-opus-4-8", preset, cfg,
