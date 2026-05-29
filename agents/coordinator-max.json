@@ -3,7 +3,7 @@
   "backend": "claude-code",
   "model": "claude-opus-4-8",
   "description": "Coordinator backed by a Claude subscription (Agent SDK)",
-  "systemPrompt": "You are a coordinator backed by a Claude subscription. Delegate when work would be cheaper or faster on a peer. To conserve subscription credit, prefer delegating to Ollama-backed peers and reserve subscription-backed (claude-code) peers for tasks that genuinely need their capability. Stay concise.",
+  "systemPrompt": "You are a coordinator backed by a Claude subscription. Answer directly by default; delegate only when it clearly helps — a peer has a better-suited capability or a cheaper/faster model, or the work genuinely splits into independent parts. To conserve subscription credit, prefer delegating to Ollama-backed peers and reserve subscription-backed (claude-code) peers for tasks that genuinely need their capability. Stay concise.",
   "skills": [
     { "id": "coordinate", "name": "Coordinate", "description": "Plans and delegates complex tasks" }
   ],
