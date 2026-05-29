@@ -40,6 +40,12 @@ export type ToolDeps = {
     backend: string;
     defaultModel: string;
   }>;
+  // When set, room tools (create_room/post/invite/leave/list_rooms/room_history)
+  // are exposed and backed by this broker client.
+  rooms?: import("../rooms/client.ts").RoomBrokerClient;
+  // Mutable per-agent holder; the inbox consumer sets `active` before a room-turn
+  // so the `post` tool can attach the right turnId. Safe due to serialised inbox.
+  roomTurn?: import("../rooms/types.ts").RoomTurnState;
 };
 
 type ObjectSchema = {
@@ -142,6 +148,61 @@ const SPAWN_TOOLS: BaseTool[] = [
   },
 ];
 
+const ROOM_TOOLS: BaseTool[] = [
+  {
+    name: "create_room",
+    description:
+      "Create a multi-party conversation room and add members by name. Returns { roomId }. Use a room for an open-ended exchange (debate, brainstorm, collaboration) — not for a task you need a single result back from (use delegate_* for that).",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short room title" },
+        members: { type: "array", items: { type: "string" }, description: "Agent names to add (besides you)" },
+        maxTurns: { type: "number", description: "Optional hard cap on total posts (default 24)" },
+      },
+      required: ["title", "members"],
+    },
+  },
+  {
+    name: "post",
+    description:
+      "Post a message to a room, addressing specific members. `to` lists the member names that should respond; use [] to address no one (lets the conversation wind down) or [\"*\"] for everyone. Only addressed members are woken to reply.",
+    parameters: {
+      type: "object",
+      properties: {
+        roomId: { type: "string" },
+        text: { type: "string", description: "What to say" },
+        to: { type: "array", items: { type: "string" }, description: "Member names to address" },
+      },
+      required: ["roomId", "text", "to"],
+    },
+  },
+  {
+    name: "invite",
+    description: "Invite another agent into an existing room by name.",
+    parameters: {
+      type: "object",
+      properties: { roomId: { type: "string" }, agent: { type: "string" } },
+      required: ["roomId", "agent"],
+    },
+  },
+  {
+    name: "leave",
+    description: "Leave a room when you're done participating.",
+    parameters: { type: "object", properties: { roomId: { type: "string" } }, required: ["roomId"] },
+  },
+  {
+    name: "list_rooms",
+    description: "List rooms you are a member of. Returns roomId, title, and members for each.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "room_history",
+    description: "Fetch the full transcript of a room you belong to.",
+    parameters: { type: "object", properties: { roomId: { type: "string" } }, required: ["roomId"] },
+  },
+];
+
 // Offered only when a WebSearchProvider is configured on ToolDeps.search.
 const WEB_SEARCH_TOOL: BaseTool = {
   name: "web_search",
@@ -185,8 +246,24 @@ Agent lifecycle tools available to you:
 - list_roles: see which role presets you can spawn.
 - spawn_agent(role, name?, model?): boot a new peer agent as its own process. The new agent registers itself; afterwards list_agents will include it and delegate_start can target it.`;
 
+export const ROOMS_SUFFIX = `
+
+You can also hold open-ended, multi-party conversations in "rooms" — distinct from
+delegation. Use the rule: need a value back from a task → delegate_*; want an
+open-ended exchange (debate, brainstorm, collaborate, or just talk with peers) → a room.
+
+Room tools:
+- create_room(title, members[], maxTurns?): start a room and add members; returns { roomId }.
+- post(roomId, text, to[]): say something, addressing the member names in \`to\`. Only addressed members reply. Use to:[] to let it wind down, to:["*"] for everyone.
+- invite(roomId, agent): add another agent.
+- leave(roomId): exit when done.
+- list_rooms() / room_history(roomId): see your rooms / a transcript.
+
+When you are addressed in a room, just reply naturally — your reply is sent to whoever addressed you. Call post() explicitly only when you want to address someone specific, address everyone, or end the exchange.`;
+
 export function getTools(deps: ToolDeps): BaseTool[] {
   const tools = deps.spawnAgent ? [...BASE_TOOLS, ...SPAWN_TOOLS] : [...BASE_TOOLS];
+  if (deps.rooms) tools.push(...ROOM_TOOLS);
   if (deps.search) tools.push(WEB_SEARCH_TOOL);
   return tools;
 }
@@ -211,7 +288,9 @@ export function toOllamaTools(deps: ToolDeps) {
 }
 
 export function buildSystemSuffix(deps: ToolDeps): string {
-  return deps.spawnAgent ? DELEGATION_SUFFIX + SPAWN_SUFFIX : DELEGATION_SUFFIX;
+  let s = deps.spawnAgent ? DELEGATION_SUFFIX + SPAWN_SUFFIX : DELEGATION_SUFFIX;
+  if (deps.rooms) s += ROOMS_SUFFIX;
+  return s;
 }
 
 function truncate(s: string, max = 80): string {
@@ -256,7 +335,8 @@ export async function runTool(
   ids: EmitIds = { sessionId: "", requestId: "" },
 ): Promise<string> {
   const result = await dispatchTool(deps, name, args, depth, parentContextId, ids);
-  if (name !== "delegate_start" && name !== "delegate_continue" && name !== "spawn_agent") {
+  const skipEmit = ["delegate_start", "delegate_continue", "spawn_agent", "create_room", "post", "invite", "leave"];
+  if (!skipEmit.includes(name)) {
     const emit = deps.emit ?? (() => Promise.resolve());
     void emit({
       sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
@@ -394,6 +474,63 @@ async function dispatchTool(
         content: r.content.length > 800 ? r.content.slice(0, 800) + "…" : r.content,
       }));
       return JSON.stringify({ results });
+    }
+
+    if (name === "create_room") {
+      if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
+      const res = await deps.rooms.createRoom({
+        title: String(args.title ?? "room"),
+        members: Array.isArray(args.members) ? (args.members as string[]) : [],
+        createdBy: deps.selfName,
+        sessionId: ids.sessionId,
+        maxTurns: typeof args.maxTurns === "number" ? args.maxTurns : undefined,
+      });
+      return JSON.stringify(res);
+    }
+
+    if (name === "post") {
+      if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
+      const roomId = String(args.roomId);
+      const to = Array.isArray(args.to) ? (args.to as string[]) : [];
+      const active = deps.roomTurn?.active;
+      // First matching post of this turn carries the turnId (resolving the delivery);
+      // any later post is treated as originating (no turnId).
+      let turnId: string | undefined;
+      if (active && active.roomId === roomId) {
+        if (!active.posted) turnId = active.turnId;
+        active.posted = true;
+      }
+      const res = await deps.rooms.post(roomId, {
+        from: deps.selfName, text: String(args.text ?? ""), to, turnId,
+      });
+      return JSON.stringify(res);
+    }
+
+    if (name === "invite") {
+      if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
+      await deps.rooms.invite(String(args.roomId), String(args.agent));
+      return JSON.stringify({ ok: true });
+    }
+
+    if (name === "leave") {
+      if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
+      await deps.rooms.leave(String(args.roomId), deps.selfName);
+      return JSON.stringify({ ok: true });
+    }
+
+    if (name === "list_rooms") {
+      if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
+      const rooms = await deps.rooms.listByMember(deps.selfName);
+      return JSON.stringify(rooms.map((r) => ({
+        roomId: r.roomId, title: r.title, members: r.members.filter((m) => m.active).map((m) => m.name),
+      })));
+    }
+
+    if (name === "room_history") {
+      if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
+      const res = await deps.rooms.get(String(args.roomId));
+      if (!res) return JSON.stringify({ error: "unknown room" });
+      return JSON.stringify(res.transcript.map((m) => ({ from: m.from, to: m.to, text: m.text })));
     }
 
     return JSON.stringify({ error: `unknown tool ${name}` });
