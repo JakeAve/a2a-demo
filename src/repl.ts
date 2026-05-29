@@ -2,6 +2,103 @@ import { streamMessage } from "./protocol/client.ts";
 import type { AgentCard } from "./protocol/types.ts";
 import type { Emitter } from "./observability/emit.ts";
 import { now } from "./observability/emit.ts";
+import type { InboxDelivery } from "./rooms/types.ts";
+
+// ---- Pure line classification (no I/O, unit-tested) ----
+
+export type Classified =
+  | { kind: "empty" }
+  | { kind: "quit" }
+  | { kind: "rooms" }
+  | { kind: "roomNew"; title: string; members: string[] }
+  | { kind: "roomJoin"; roomId: string }
+  | { kind: "roomLeave" }
+  | { kind: "roomLog" }
+  | { kind: "direct"; agent: string; prompt: string }
+  | { kind: "roomPost"; to: string[]; text: string }
+  | { kind: "hint"; message: string };
+
+export type ClassifyOpts = {
+  focusedRoomId: string | null;
+  focusedMembers: ReadonlySet<string>;
+  knownAgents: ReadonlySet<string>;
+  lastAddressedBy: string | null;
+};
+
+// "@A @B hello" -> { to: ["A","B"], rest: "hello" }
+export function parseLeadingMentions(line: string): { to: string[]; rest: string } {
+  const to: string[] = [];
+  let rest = line.trim();
+  let m: RegExpMatchArray | null;
+  while ((m = rest.match(/^@(\S+)\s+(.*)$/))) {
+    to.push(m[1]);
+    rest = m[2].trim();
+  }
+  return { to, rest };
+}
+
+export function classifyLine(raw: string, opts: ClassifyOpts): Classified {
+  const line = raw.trim();
+  if (!line) return { kind: "empty" };
+  if (line === ":quit" || line === ":q") return { kind: "quit" };
+  if (line === ":rooms") return { kind: "rooms" };
+
+  if (line.startsWith(":room")) {
+    const rest = line.slice(":room".length).trim();
+    if (rest === "leave") return { kind: "roomLeave" };
+    if (rest === "log") return { kind: "roomLog" };
+    if (rest.startsWith("new")) {
+      const tokens = rest.slice("new".length).trim().split(/\s+/).filter(Boolean);
+      if (tokens.length < 2) return { kind: "hint", message: "usage: :room new <title> <a,b,...>" };
+      const members = tokens.pop()!.split(",").map((s) => s.trim()).filter(Boolean);
+      const title = tokens.join(" ");
+      if (!title || members.length === 0) {
+        return { kind: "hint", message: "usage: :room new <title> <a,b,...>" };
+      }
+      return { kind: "roomNew", title, members };
+    }
+    if (rest.startsWith("join")) {
+      const roomId = rest.slice("join".length).trim();
+      if (!roomId) return { kind: "hint", message: "usage: :room join <roomId>" };
+      return { kind: "roomJoin", roomId };
+    }
+    return { kind: "hint", message: "commands: :rooms, :room new|join|leave|log" };
+  }
+
+  const at = line.match(/^@(\S+)\s+(.+)$/);
+  if (at) {
+    const [, first, restText] = at;
+    // Addressing an active member of the focused room => room post.
+    if (opts.focusedRoomId && opts.focusedMembers.has(first)) {
+      const parsed = parseLeadingMentions(line);
+      return { kind: "roomPost", to: parsed.to, text: parsed.rest };
+    }
+    // A known agent that is NOT a focused member => direct-send escape (focused or not).
+    if (opts.knownAgents.has(first)) return { kind: "direct", agent: first, prompt: restText };
+    // Focused but unknown @name => treat as a room recipient (broker drops unknowns).
+    if (opts.focusedRoomId) {
+      const parsed = parseLeadingMentions(line);
+      return { kind: "roomPost", to: parsed.to, text: parsed.rest };
+    }
+    return { kind: "hint", message: `unknown agent: ${first}` };
+  }
+
+  // Plain line.
+  if (opts.focusedRoomId) {
+    const to = opts.lastAddressedBy ? [opts.lastAddressedBy] : ["*"];
+    return { kind: "roomPost", to, text: line };
+  }
+  return {
+    kind: "hint",
+    message: `(use @<agent> <prompt>; known: ${[...opts.knownAgents].join(", ")})`,
+  };
+}
+
+// The line printed when a delivery arrives for the human.
+export function formatDelivery(d: InboxDelivery): string {
+  const text = d.transcript.at(-1)?.text ?? "";
+  return `[room: ${d.title}] ${d.addressedBy} → you: ${text}`;
+}
 
 export type ReplDeps = {
   agents: Map<string, AgentCard>; // name → card
