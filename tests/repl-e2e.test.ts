@@ -136,3 +136,44 @@ Deno.test("human receives a delivery and replies with the correct turnId", async
 
   await bex.handle.shutdown(); await broker.shutdown(); kv.close();
 });
+
+Deno.test("human joins an existing room, participates, and leaves on quit", async () => {
+  const kv = await Deno.openKv(":memory:");
+  const urls: Record<string, string> = {};
+  const broker = await startRoomBroker({
+    kv, port: 0, token: "tok",
+    resolveInbox: (n) => Promise.resolve(urls[n] ?? null),
+    agentDeadlineMs: 2000, humanDeadlineMs: 60_000, defaultMaxTurns: 24, sweepIntervalMs: 0,
+  });
+  const bex = await stubAgent("Bex", broker.url);
+  urls["Bex"] = bex.url;
+
+  // Bex creates the room BEFORE the human joins it.
+  const real = new RoomBrokerClient(broker.url, "tok");
+  const { roomId } = await real.createRoom({
+    title: "standup", members: ["Bex"], createdBy: "Bex", sessionId: "s1",
+  });
+
+  const out: string[] = [];
+  await runRepl({
+    agents: new Map<string, AgentCard>(),
+    bearerToken: "tok",
+    roomBrokerUrl: broker.url,
+    humanName: "human",
+    output: (s) => out.push(s),
+    input: scripted([`:room join ${roomId}`, "@Bex hello", ":quit"], 250),
+  });
+
+  const got = (await real.get(roomId))!;
+  // 1. The human's post was accepted (proves it joined as an active member; a
+  //    non-member post would 403 and never reach the transcript).
+  assertEquals(got.transcript.some((m) => m.from === "human" && m.text === "hello"), true);
+  // 2. The human joined as a kind:"human" member.
+  const me = got.room.members.find((m) => m.name === "human");
+  assertEquals(me?.kind, "human");
+  // 3. On quit the REPL left the room; with only Bex active, the broker
+  //    auto-closed it — proving leave/cleanup ran.
+  assertEquals(got.room.status, "closed");
+
+  await bex.handle.shutdown(); await broker.shutdown(); kv.close();
+});
