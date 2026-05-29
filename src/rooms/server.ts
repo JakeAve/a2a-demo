@@ -110,7 +110,7 @@ export function startRoomBroker(cfg: RoomBrokerConfig): Promise<RoomBrokerHandle
     const body = await c.req.json();
     const room = await store.getRoom(roomId);
     if (!room || room.status !== "open") return c.json({ error: "unknown or closed room" }, 404);
-    if (!room.members.some((m) => m.name === body.from)) return c.json({ error: "not a member" }, 403);
+    if (!room.members.some((m) => m.name === body.from && m.active)) return c.json({ error: "not a member" }, 403);
 
     if (await store.atTurnCap(roomId)) {
       ev(room.sessionId, roomId, "room-broker", "room.capped", { turnCount: room.turnCount });
@@ -185,16 +185,21 @@ export function startRoomBroker(cfg: RoomBrokerConfig): Promise<RoomBrokerHandle
 
   // Periodic sweep: resolve overdue deliveries so a dead member can't wedge a room.
   const intervalMs = cfg.sweepIntervalMs ?? 30_000;
-  // deno-lint-ignore no-explicit-any
-  let timer: any;
+  let timer: ReturnType<typeof setInterval> | undefined;
   if (intervalMs > 0) {
     timer = setInterval(async () => {
-      for (const d of await store.sweepExpired()) {
+      const swept = await store.sweepExpired();
+      const roomIds = new Set<string>();
+      for (const d of swept) {
+        roomIds.add(d.roomId);
         const room = await store.getRoom(d.roomId);
         ev(room?.sessionId ?? "", d.roomId, "room-broker", "room.turn_timeout",
           { turnId: d.turnId, member: d.member });
-        if (room && await store.isIdle(d.roomId)) {
-          ev(room.sessionId, d.roomId, "room-broker", "room.idle", {});
+      }
+      for (const roomId of roomIds) {
+        const room = await store.getRoom(roomId);
+        if (room && await store.isIdle(roomId)) {
+          ev(room.sessionId, roomId, "room-broker", "room.idle", {});
         }
       }
     }, intervalMs);

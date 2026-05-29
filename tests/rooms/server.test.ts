@@ -42,6 +42,35 @@ Deno.test("create + post pushes a delivery to the addressed member and emits eve
   await broker.shutdown(); kv.close();
 });
 
+// Note: harness only resolves "Alvy" and "Bex"; "Cy" is added via humanMembers
+// (inline inboxUrl) so resolveInbox is not needed for Cy.
+Deno.test("a member who left cannot post (403)", async () => {
+  const { kv, broker, base, h } = await harness();
+  const created = await (await fetch(`${base}/rooms`, {
+    method: "POST", headers: h,
+    body: JSON.stringify({
+      title: "t",
+      members: ["Alvy", "Bex"],
+      humanMembers: [{ name: "Cy", inboxUrl: "http://cy" }],
+      createdBy: "Alvy",
+      sessionId: "s1",
+    }),
+  })).json();
+  const roomId = created.roomId;
+  // Bex leaves; Alvy + Cy remain active so the room stays open.
+  await fetch(`${base}/rooms/${roomId}/leave`, {
+    method: "POST", headers: h, body: JSON.stringify({ agent: "Bex" }),
+  });
+  // Bex tries to post after leaving — must be rejected.
+  const res = await fetch(`${base}/rooms/${roomId}/post`, {
+    method: "POST", headers: h, body: JSON.stringify({ from: "Bex", text: "still here?", to: ["Alvy"] }),
+  });
+  // Room is still open (2 active members remain), so the active-member guard fires → 403.
+  assertEquals(res.status, 403);
+  await res.body?.cancel();
+  await broker.shutdown(); kv.close();
+});
+
 Deno.test("post past maxTurns is rejected and emits room.capped", async () => {
   const { kv, broker, base, h, events } = await harness();
   const created = await (await fetch(`${base}/rooms`, {
