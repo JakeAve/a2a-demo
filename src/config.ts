@@ -18,7 +18,7 @@ export type AppConfig = {
 };
 
 export type AgentSpec = {
-  name: string;       // identity (e.g. "scout")
+  name: string;       // identity (e.g. "worker")
   preset: RolePreset; // role config
   model: string;      // resolved model (preset.model or CLI override)
 };
@@ -56,17 +56,17 @@ export function assertBackendCredentials(specs: AgentSpec[], cfg: AppConfig): vo
   }
 }
 
-/** Parse the --agents flag (`--agents=a,b` or `--agents a,b`); default "coordinator,scout". */
+/** Parse the --agents flag (`--agents=a,b` or `--agents a,b`); default "coordinator,worker". */
 export function getAgentsFlag(args: string[]): string {
   for (const arg of args) {
     if (arg.startsWith("--agents=")) return arg.slice("--agents=".length);
   }
   const i = args.indexOf("--agents");
   if (i !== -1 && args[i + 1]) return args[i + 1];
-  return "coordinator,scout";
+  return "coordinator,worker";
 }
 
-// Parse "coordinator,scout:gemma3:1b,code-reviewer" → AgentSpec[]
+// Parse "coordinator,worker:gemma3:1b,researcher" → AgentSpec[]
 // Splits on the FIRST colon only so model tags like "gemma3:1b" survive.
 export function parseAgentsFlag(
   raw: string,

@@ -1,6 +1,6 @@
 // MCP entry point. Run with:
 //
-//   deno task mcp --agents="coordinator,scout,analyst"
+//   deno task mcp --agents="coordinator,worker"
 //
 // Boots the same scaffolding as the REPL orchestrator (registry + agents +
 // spawn closure) but serves an MCP stdio server instead of the REPL. This

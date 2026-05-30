@@ -227,7 +227,7 @@ peer that would only delegate it again.
 
 If you are explicitly asked to delegate, to route work to a named peer, or to
 hand a result onward (e.g. "have the researcher do X", "forward this to the
-summarizer"), then do it — actually call the delegation tool. An explicit
+worker"), then do it — actually call the delegation tool. An explicit
 routing request overrides the restraint above; saying you'll delegate without
 calling the tool is a failure, not an answer.
 
