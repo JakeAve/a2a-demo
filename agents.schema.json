@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A2A Agents Roster",
+  "description": "A map of role name to role preset. agents.default.json is committed; an optional gitignored agents.json fully replaces it when present.",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" }
+  },
+  "additionalProperties": {
+    "type": "object",
+    "required": ["backend", "model", "description", "systemPrompt", "skills"],
+    "additionalProperties": false,
+    "properties": {
+      "backend": {
+        "enum": ["claude", "ollama", "claude-code"],
+        "description": "Which inference backend handles this role."
+      },
+      "model": {
+        "type": "string",
+        "description": "Backend-specific model identifier (e.g. 'claude-haiku-4-5' or 'gemma4:e4b')."
+      },
+      "description": {
+        "type": "string",
+        "description": "One-sentence summary shown to peer agents in list_agents."
+      },
+      "systemPrompt": {
+        "type": "string",
+        "description": "System prompt prepended to every conversation."
+      },
+      "skills": {
+        "type": "array",
+        "description": "Capabilities surfaced via the Agent Card.",
+        "items": {
+          "type": "object",
+          "required": ["id", "name", "description"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "description": { "type": "string" }
+          }
+        }
+      },
+      "toolCapable": {
+        "type": "boolean",
+        "description": "Set true if the model supports function calling. Claude is always true; Ollama models vary."
+      },
+      "webSearch": {
+        "type": "boolean",
+        "description": "Claude backend only: expose Anthropic's server-side web_search tool."
+      }
+    }
+  }
+}

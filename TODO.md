@@ -59,7 +59,7 @@ risk of the two diverging.
 **Priority: high (UX trap, hit on the first Plan-2 smoke test).** When no
 room is focused, typing `@agent <prompt>` silently does a 1:1 direct send
 (the intended escape) — but there is no cue, so it's easy to believe you
-posted to a room when you didn't. Observed live: `@analyst …` typed before
+posted to a room when you didn't. Observed live: `@worker …` typed before
 `:room new` went out as a direct send and created no room, with no signal.
 
 Fix: echo a one-line cue on the direct-send path, e.g.

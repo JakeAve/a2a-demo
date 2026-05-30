@@ -34,7 +34,8 @@ Deno.test("delegation suffix dropped the answer-by-default over-correction", () 
 });
 
 Deno.test("researcher prompt defaults to decompose-and-delegate", async () => {
-  const roles = await loadRoles();
+  // Pin to the committed defaults so a local agents.json can't affect this.
+  const roles = await loadRoles({ overridePath: "agents.default.json" });
   const p = roles.researcher.systemPrompt;
   assert(/decompose|break|sub-question/i.test(p), "researcher should frame decomposition");
   assert(/delegat/i.test(p), "researcher should frame delegation");
@@ -50,7 +51,8 @@ Deno.test("researcher prompt defaults to decompose-and-delegate", async () => {
 });
 
 Deno.test("coordinator prompt honors named-peer routing", async () => {
-  const roles = await loadRoles();
+  // Pin to the committed defaults so a local agents.json can't affect this.
+  const roles = await loadRoles({ overridePath: "agents.default.json" });
   const p = roles.coordinator.systemPrompt;
   assert(/route|name|ask/i.test(p), "coordinator should honor routing to a named peer");
 });

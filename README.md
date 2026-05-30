@@ -10,51 +10,50 @@ shared bearer token.
 
     cp .env.example .env
     # edit ANTHROPIC_API_KEY
-    deno task start --agents="coordinator,scout,analyst"
+    deno task start --agents="coordinator,researcher,worker"
 
 In the REPL:
 
-    > @coordinator ask scout to write a haiku about frogs, then make it darker
+    > @coordinator ask worker to write a haiku about frogs, then make it darker
     > @researcher decompose: what's the difference between TCP and UDP?
-    > @analyst use list_agents, then delegate a math question to a peer
+    > @worker use list_agents, then delegate a math question to a peer
 
 `@<name>` routes a prompt to that agent. Streaming token output and live
 `· tool_name{args}` events appear inline.
 
 ## Agents
 
-Each agent is defined by a JSON file in `agents/`. The filename (minus
-`.json`) is the role name.
+The roster lives in **`agents.default.json`** (committed) — a JSON object
+mapping role name to preset. To customize locally, create **`agents.json`**
+(gitignored); when present it **fully replaces** the default roster. The shape
+of both files is described by `agents.schema.json` (referenced via `$schema`
+for editor autocomplete).
 
 Agent names are identities, deliberately **decoupled from the model** that
 backs them — so a role can swap models without breaking how peers address it.
 
 | Role | Backend | Tools | Purpose |
 |---|---|---|---|
-| `coordinator` | Claude API (`claude-sonnet-4-6`) | yes | Coordinator — delegates grunt work to peers |
-| `coordinator-max` | Claude subscription via Agent SDK (`claude-opus-4-8`) | yes | Same role on a Claude subscription (OAuth token, no API key needed) |
-| `scout` | Ollama (`gemma3:1b`) | no | Fast local generalist |
-| `analyst` | Ollama (`gemma4:e4b`) | yes | Tool-capable local reasoner |
-| `code-reviewer` | Ollama (`gemma4:e4b`) | yes | Reviews code/diffs for bugs |
-| `summarizer` | Ollama (`gemma3:1b`) | no | Condenses long text |
-| `researcher` | Claude API (`claude-sonnet-4-6`) | yes | Decomposes questions, delegates, synthesizes |
-| `translator` | Ollama (`gemma4:e4b`) | no | Human-lang and natural↔structured translation |
+| `coordinator` | Claude API (`claude-haiku-4-5`) | yes | Answers simple requests; delegates the rest to peers |
+| `researcher` | Claude API (`claude-haiku-4-5`) | yes + web_search | Decomposes questions, delegates, synthesizes |
+| `worker` | Ollama (`gemma4:e4b`) | yes | Local worker: summarize, translate, review, reason |
 
-**Add a new agent:** drop `agents/<name>.json` matching the shape in
-`agents/role.schema.json`. Restart. No code changes needed.
+**Add or change agents:** create `agents.json` (it fully replaces the default
+roster) with one entry per role matching the shape in `agents.schema.json`.
+Restart. No code changes needed.
 
-**Override a model at the CLI:** `--agents="coordinator,scout:gemma3:1b"`
-runs the `scout` role with the `gemma3:1b` tag.
+**Override a model at the CLI:** `--agents="coordinator,worker:gemma3:1b"`
+runs the `worker` role with the `gemma3:1b` tag.
 
 ## Architecture
 
 ```
-deno task start --agents="coordinator,scout,analyst"
+deno task start --agents="coordinator,researcher,worker"
 
   [registry]      localhost:7890          (only fixed port)
   [coordinator]   localhost:<dynamic>     (HTTP server, Agent Card at /.well-known/agent.json)
-  [scout]         localhost:<dynamic>
-  [analyst]       localhost:<dynamic>
+  [researcher]    localhost:<dynamic>
+  [worker]        localhost:<dynamic>
   [REPL]          stdin/stdout            (@mentions, live SSE)
 ```
 
@@ -95,8 +94,8 @@ spawn capability — that authority lives only with the orchestrator.
 Each `delegate_*` call increments an `x-depth` header. A request whose depth
 reaches the cap is rejected with HTTP 429. The cap is **pegged to the current
 registered-agent count** (floored at 2), so a bigger swarm can fan out deeper —
-e.g. with `coordinator, researcher, scout` registered, `REPL → coordinator →
-researcher → scout` is allowed. Set `A2A_MAX_DEPTH` to a fixed number to
+e.g. with `coordinator, researcher, worker` registered, `REPL → coordinator →
+researcher → worker` is allowed. Set `A2A_MAX_DEPTH` to a fixed number to
 override (e.g. `A2A_MAX_DEPTH=2` restores the original `REPL → A → B` budget).
 
 Note: a delegating role (e.g. `researcher`, whose job is to decompose and
@@ -108,7 +107,7 @@ it.
 
 Spin up an agent in another terminal — it joins the same registry:
 
-    deno task start:agent --role=analyst --name=remote --registry=http://localhost:7890
+    deno task start:agent --role=worker --name=remote --registry=http://localhost:7890
 
 Useful for running peers on different machines (subject to network
 config — see `TODO.md`'s multi-machine entry).
@@ -117,8 +116,8 @@ config — see `TODO.md`'s multi-machine entry).
 
 - `scripts/smoke.ts` — full Tier C round-trip (Claude + Ollama,
   delegate_start + delegate_continue + spawn_agent)
-- `scripts/smoke-gemma-tools.ts` — verify the `analyst` role (gemma4:e4b)
-  can call A2A tools itself (no Claude in the loop)
+- `scripts/smoke-gemma-tools.ts` — tool-capable `captain` delegating to a
+  passive `helper` (both Ollama `worker`), no Claude in the loop
 - `scripts/smoke-streaming-tools.ts` — verify streaming token output
   through the tool loop
 - `scripts/kv-dump.ts` — dump every thread + conversation history in
@@ -142,7 +141,7 @@ deno task monitor                       # http://localhost:7891
 
 # terminal 2 — point agents at it
 A2A_MONITOR_URL=http://localhost:7891 \
-  deno task start --agents="coordinator,scout,analyst"
+  deno task start --agents="coordinator,researcher,worker"
 ```
 
 Open http://localhost:7891, pick a session, and watch delegations stream in.
@@ -159,7 +158,7 @@ client) can call A2A agents through the raw delegation tools — instead of the
 `@agent` REPL.
 
 ```
-deno task mcp --agents="coordinator,scout,analyst"
+deno task mcp --agents="coordinator,researcher,worker"
 ```
 
 This boots a self-contained orchestrator (registry + the named agents) and
@@ -171,7 +170,7 @@ Register it with Claude Code:
 
 ```
 claude mcp add a2a -- deno run -A --unstable-kv --env-file=.env \
-  /abs/path/to/a2a/src/mcp.ts --agents="coordinator,scout,analyst"
+  /abs/path/to/a2a/src/mcp.ts --agents="coordinator,researcher,worker"
 ```
 
 Replace `/abs/path/to/a2a` with this repo's absolute path.
