@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2A — Agent Communication Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07070f;
+  --surface: #0d0d1a;
+  --surface2: #131325;
+  --border: #1c1c30;
+  --border2: #252540;
+  --text: #e8e6f2;
+  --text2: #9090b8;
+  --muted: #444468;
+  --del: #e0a030;
+  --del-dim: #1e1505;
+  --del-mid: #3a2a08;
+  --room: #a78bfa;
+  --room-dim: #130f25;
+  --room-mid: #261850;
+  --ret: #7fd17f;
+  --ret-dim: #0a1a0a;
+  --mon: #3a7bff;
+  --err: #e05555;
+  --grid: #0d0d1a;
+  --font-d: 'Fraunces', Georgia, serif;
+  --font-m: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+  color: var(--text);
+  font-family: var(--font-m);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ─── Nav ─────────────────────────────────────────────────────────── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 48px; height: 48px;
+  background: rgba(7,7,15,0.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: var(--font-d); font-size: 15px; font-weight: 600;
+  color: var(--text); text-decoration: none; letter-spacing: -0.02em;
+  margin-right: 16px;
+}
+nav a { color: var(--muted); text-decoration: none; font-size: 11px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 4px; transition: color 0.15s; }
+nav a:hover { color: var(--text2); }
+.nav-spacer { flex: 1; }
+.nav-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 3px; font-weight: 500;
+}
+.tag-del { background: var(--del-mid); color: var(--del); border: 1px solid #4a3510; }
+.tag-room { background: var(--room-mid); color: var(--room); border: 1px solid #3a2060; }
+
+/* ─── Layout ─────────────────────────────────────────────────────── */
+.container { max-width: 1160px; margin: 0 auto; padding: 0 48px; }
+
+/* ─── Hero ───────────────────────────────────────────────────────── */
+.hero {
+  min-height: 90vh; display: flex; align-items: center;
+  padding: 80px 48px;
+  max-width: 1160px; margin: 0 auto;
+  position: relative;
+}
+.hero-content { max-width: 640px; }
+.hero-eyebrow {
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 28px;
+  display: flex; align-items: center; gap: 12px;
+}
+.hero-eyebrow::before {
+  content: ''; display: block; width: 32px; height: 1px; background: var(--muted);
+}
+.hero h1 {
+  font-family: var(--font-d);
+  font-size: clamp(52px, 8vw, 108px);
+  font-weight: 700; line-height: 0.92;
+  letter-spacing: -0.04em; margin-bottom: 32px;
+}
+.hero h1 .accent { color: var(--room); font-style: italic; font-weight: 200; }
+.hero h1 .accent2 { color: var(--del); }
+.hero-desc {
+  font-size: 14px; color: var(--text2); line-height: 1.75;
+  max-width: 480px; margin-bottom: 40px;
+}
+.hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-m); font-size: 11px; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 9px 18px; border-radius: 4px;
+  text-decoration: none; transition: all 0.15s; border: 1px solid;
+}
+.btn-del { background: var(--del-mid); color: var(--del); border-color: #4a3510; }
+.btn-del:hover { background: #4a3510; }
+.btn-room { background: var(--room-mid); color: var(--room); border-color: #3a2060; }
+.btn-room:hover { background: #3a2060; }
+
+/* hero background ornament */
+.hero-bg {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  opacity: 0.07; pointer-events: none;
+}
+
+/* ─── Sections ───────────────────────────────────────────────────── */
+.section {
+  padding: 96px 48px;
+  max-width: 1160px; margin: 0 auto;
+  border-top: 1px solid var(--border);
+}
+.section-num {
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-num::before { content: ''; display: block; width: 24px; height: 1px; background: var(--muted); }
+.section h2 {
+  font-family: var(--font-d);
+  font-size: clamp(28px, 4vw, 52px);
+  font-weight: 600; letter-spacing: -0.03em; line-height: 1.05;
+  margin-bottom: 48px;
+}
+.section h2 .dim { color: var(--muted); font-weight: 200; font-style: italic; }
+
+/* ─── Component map ──────────────────────────────────────────────── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 48px;
+}
+.arch-cell {
+  background: var(--surface);
+  padding: 24px 28px;
+  position: relative;
+}
+.arch-cell-label {
+  font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.arch-cell-name {
+  font-family: var(--font-d); font-size: 20px; font-weight: 600;
+  letter-spacing: -0.02em; margin-bottom: 4px;
+}
+.arch-cell-port {
+  font-size: 10px; color: var(--muted);
+  font-family: var(--font-m);
+  margin-bottom: 10px;
+}
+.arch-cell-desc { font-size: 12px; color: var(--text2); line-height: 1.6; }
+.arch-cell-tag {
+  position: absolute; top: 20px; right: 20px;
+  font-size: 9px; padding: 2px 7px; border-radius: 3px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.c-reg   { border-top: 2px solid var(--mon); }
+.c-mon   { border-top: 2px solid var(--ret); }
+.c-brok  { border-top: 2px solid var(--room); }
+.c-agent { border-top: 2px solid var(--del); }
+.c-repl  { border-top: 2px solid var(--muted); }
+.arch-cell.span2 { grid-column: span 2; }
+
+/* ─── Two-col ─────────────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
+.two-col-wide { display: grid; grid-template-columns: 3fr 2fr; gap: 64px; align-items: start; }
+
+/* ─── Flow diagrams ───────────────────────────────────────────────── */
+.flow-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.flow-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.flow-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.flow-title { color: var(--text2); }
+.flow-svg { display: block; width: 100%; }
+
+/* ─── Explanation cards ───────────────────────────────────────────── */
+.explain { display: flex; flex-direction: column; gap: 24px; }
+
+.explain h3 {
+  font-family: var(--font-d); font-size: 28px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 12px;
+}
+.explain p { font-size: 13px; color: var(--text2); line-height: 1.75; }
+.explain p + p { margin-top: 8px; }
+
+.property-list { list-style: none; }
+.property-list li {
+  display: grid; grid-template-columns: 100px 1fr;
+  gap: 12px; padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.property-list li:last-child { border-bottom: none; }
+.prop-key { color: var(--muted); }
+.prop-val { color: var(--text); }
+
+/* ─── Pros / Cons ─────────────────────────────────────────────────── */
+.pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pros, .cons {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 16px 18px;
+}
+.pros { border-left: 2px solid var(--ret); }
+.cons { border-left: 2px solid var(--err); }
+.pros h4, .cons h4 {
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.pros h4 { color: var(--ret); }
+.cons h4 { color: var(--err); }
+.pros li, .cons li {
+  list-style: none; font-size: 12px; color: var(--text2);
+  padding: 3px 0; line-height: 1.5;
+}
+.pros li::before { content: '+ '; color: var(--ret); }
+.cons li::before { content: '− '; color: var(--err); }
+
+/* ─── Comparison table ───────────────────────────────────────────── */
+.compare-table {
+  width: 100%; border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.compare-table th, .compare-table td {
+  padding: 13px 18px; text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.compare-table th {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  font-weight: 500; background: var(--surface2);
+}
+.compare-table th:first-child { color: var(--muted); }
+.compare-table th:nth-child(2) { color: var(--del); }
+.compare-table th:nth-child(3) { color: var(--room); }
+.compare-table td:first-child { color: var(--muted); }
+.compare-table td:nth-child(2) { color: var(--text); }
+.compare-table td:nth-child(3) { color: var(--text); }
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+.compare-table .yes { color: var(--ret); }
+.compare-table .no { color: var(--err); }
+
+/* ─── Decision section ───────────────────────────────────────────── */
+.decision-row {
+  display: grid; grid-template-columns: 1fr 48px 1fr; gap: 16px; align-items: center;
+  margin-bottom: 16px;
+}
+.decision-card {
+  border: 1px solid var(--border); border-radius: 8px; padding: 28px 32px;
+}
+.decision-card.del-card {
+  background: var(--del-dim); border-color: var(--del-mid);
+}
+.decision-card.room-card {
+  background: var(--room-dim); border-color: var(--room-mid);
+}
+.decision-card .dc-q {
+  font-family: var(--font-d); font-size: 18px; font-weight: 400; font-style: italic;
+  line-height: 1.3; margin-bottom: 12px;
+}
+.del-card .dc-q { color: var(--del); }
+.room-card .dc-q { color: var(--room); }
+.decision-card .dc-rule {
+  font-size: 11px; color: var(--text2); line-height: 1.6;
+}
+.decision-card .dc-examples {
+  margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px;
+}
+.dc-example {
+  font-size: 10px; padding: 2px 8px; border-radius: 3px;
+  border: 1px solid; font-family: var(--font-m);
+}
+.del-card .dc-example { border-color: var(--del-mid); color: var(--del); background: rgba(224,160,48,0.1); }
+.room-card .dc-example { border-color: var(--room-mid); color: var(--room); background: rgba(167,139,250,0.1); }
+.decision-vs {
+  text-align: center; font-family: var(--font-d); font-size: 20px;
+  font-weight: 200; color: var(--muted); font-style: italic;
+}
+
+/* ─── Key rule callout ────────────────────────────────────────────── */
+.rule-box {
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 24px 32px;
+  display: flex; align-items: flex-start; gap: 20px;
+  margin-top: 32px;
+}
+.rule-icon { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+.rule-text { font-size: 13px; color: var(--text2); line-height: 1.7; }
+.rule-text strong { color: var(--text); font-weight: 500; }
+.rule-highlight {
+  display: inline; font-family: var(--font-d); font-size: 15px;
+  font-style: italic; letter-spacing: -0.01em;
+}
+.del-hl { color: var(--del); }
+.room-hl { color: var(--room); }
+
+/* ─── Code snippet ───────────────────────────────────────────────── */
+.code-snippet {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px 16px; margin-top: 16px;
+  font-size: 11px; line-height: 1.8; overflow-x: auto;
+}
+.cs-comment { color: var(--muted); }
+.cs-key { color: var(--room); }
+.cs-str { color: var(--ret); }
+.cs-fn { color: var(--del); }
+
+/* ─── Footer ─────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 48px;
+  max-width: 1160px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--muted); font-size: 11px;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  nav { padding: 0 24px; }
+  nav a:not(.nav-logo) { display: none; }
+  .hero, .section { padding-left: 24px; padding-right: 24px; }
+  .two-col, .two-col-wide { grid-template-columns: 1fr; gap: 40px; }
+  .arch-grid { grid-template-columns: 1fr; }
+  .arch-cell.span2 { grid-column: span 1; }
+  .pros-cons { grid-template-columns: 1fr; }
+  .decision-row { grid-template-columns: 1fr; }
+  .decision-vs { display: none; }
+  footer { flex-direction: column; gap: 8px; text-align: center; }
+}
+
+/* ─── Animations ─────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-content { animation: fadeIn 0.7s ease both; }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────────────────────── -->
+<nav>
+  <a href="#" class="nav-logo">A2A</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#delegation">Delegation</a>
+  <a href="#rooms">Rooms</a>
+  <a href="#compare">Compare</a>
+  <a href="#decide">Decide</a>
+  <div class="nav-spacer"></div>
+  <span class="nav-tag tag-del">delegate_*</span>
+  <span class="nav-tag tag-room">rooms</span>
+</nav>
+
+<!-- ── HERO ────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-content">
+    <div class="hero-eyebrow">Agent-to-Agent Communication</div>
+    <h1>Two<br><span class="accent2">primitive</span><br><span class="accent">shapes.</span></h1>
+    <p class="hero-desc">
+      A2A agents can talk in two fundamentally different ways.
+      <strong style="color:var(--del)">Delegation</strong> is a synchronous call — you ask, you wait, you get a value back.
+      <strong style="color:var(--room)">Rooms</strong> are async conversations — you post, others reply in their own time, nobody blocks.
+      Same system. Different topology. Different use cases.
+    </p>
+    <div class="hero-ctas">
+      <a href="#delegation" class="btn btn-del">↓ Delegation</a>
+      <a href="#rooms" class="btn btn-room">↓ Rooms</a>
+    </div>
+  </div>
+
+  <!-- Background SVG ornament -->
+  <svg class="hero-bg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+    <!-- delegation side: stacked boxes -->
+    <rect x="20" y="60" width="120" height="44" rx="4" stroke="#e0a030" stroke-width="1"/>
+    <text x="80" y="87" text-anchor="middle" fill="#e0a030" font-family="JetBrains Mono" font-size="11">Caller</text>
+    <line x1="80" y1="104" x2="80" y2="140" stroke="#e0a030" stroke-width="1"/>
+    <rect x="20" y="140" width="120" height="44" rx="4" stroke="#e0a030" stroke-width="1"/>
+    <text x="80" y="167" text-anchor="middle" fill="#e0a030" font-family="JetBrains Mono" font-size="11">Agent A</text>
+    <line x1="80" y1="184" x2="80" y2="220" stroke="#e0a030" stroke-width="1"/>
+    <rect x="20" y="220" width="120" height="44" rx="4" stroke="#e0a030" stroke-width="1"/>
+    <text x="80" y="247" text-anchor="middle" fill="#e0a030" font-family="JetBrains Mono" font-size="11">Agent B</text>
+    <text x="80" y="320" text-anchor="middle" fill="#e0a030" font-family="JetBrains Mono" font-size="10" opacity="0.6">blocking chain</text>
+
+    <!-- rooms side: hub and spokes -->
+    <rect x="330" y="170" width="120" height="44" rx="4" stroke="#a78bfa" stroke-width="1"/>
+    <text x="390" y="197" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="11">Broker</text>
+    <line x1="390" y1="170" x2="340" y2="100" stroke="#a78bfa" stroke-width="1" opacity="0.5"/>
+    <line x1="390" y1="170" x2="440" y2="100" stroke="#a78bfa" stroke-width="1" opacity="0.5"/>
+    <line x1="390" y1="214" x2="330" y2="290" stroke="#a78bfa" stroke-width="1" opacity="0.5"/>
+    <line x1="390" y1="214" x2="450" y2="290" stroke="#a78bfa" stroke-width="1" opacity="0.5"/>
+    <circle cx="340" cy="88" r="22" stroke="#a78bfa" stroke-width="1"/>
+    <text x="340" y="92" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="9">Alvy</text>
+    <circle cx="440" cy="88" r="22" stroke="#a78bfa" stroke-width="1"/>
+    <text x="440" y="92" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="9">Bex</text>
+    <circle cx="330" cy="302" r="22" stroke="#a78bfa" stroke-width="1"/>
+    <text x="330" y="306" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="9">Cal</text>
+    <circle cx="450" cy="302" r="22" stroke="#a78bfa" stroke-width="1"/>
+    <text x="450" y="306" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="9">human</text>
+    <text x="390" y="380" text-anchor="middle" fill="#a78bfa" font-family="JetBrains Mono" font-size="10" opacity="0.6">async fanout</text>
+  </svg>
+</div>
+
+<!-- ── 01: ARCHITECTURE ─────────────────────────────────────────────── -->
+<section class="section" id="architecture">
+  <div class="section-num">01 — System map</div>
+  <h2>Five components.<br><span class="dim">One orchestrator starts them all.</span></h2>
+
+  <div class="arch-grid">
+    <div class="arch-cell c-reg">
+      <div class="arch-cell-label">Service</div>
+      <div class="arch-cell-name">Registry</div>
+      <div class="arch-cell-port">:7890 · HTTP</div>
+      <div class="arch-cell-desc">Name → agent card directory. Agents self-register on startup with their <code>AgentCard</code> (name, URL, capabilities). Everyone else — other agents, the broker — resolves peer inbox URLs through here. Pure discovery: no state, no messages, no events.</div>
+    </div>
+    <div class="arch-cell c-mon">
+      <div class="arch-cell-label">Service</div>
+      <div class="arch-cell-name">Monitor</div>
+      <div class="arch-cell-port">:7891 · HTTP + SSE</div>
+      <div class="arch-cell-desc">Event sink for every observable action in the system. Agents emit <code>turn.started</code>, <code>tool.call</code>, <code>message.completed</code>; the broker emits all <code>room.*</code> events. The web UI renders everything as swimlane arrows. Fire-and-forget: monitor failure never affects agent behaviour.</div>
+    </div>
+    <div class="arch-cell c-brok">
+      <div class="arch-cell-label">Service</div>
+      <div class="arch-cell-name">Room Broker</div>
+      <div class="arch-cell-port">:7892 · HTTP</div>
+      <div class="arch-cell-desc">Single authority on room membership, the canonical message transcript, delivery records, and turn-count accounting. Serialises all mutations per room. Pushes inbox deliveries to agents. Resolves member inbox URLs via the Registry. Emits all <code>room.*</code> events to the Monitor.</div>
+    </div>
+    <div class="arch-cell c-agent span2">
+      <div class="arch-cell-label">Actor (N instances)</div>
+      <div class="arch-cell-name">Agent</div>
+      <div class="arch-cell-port">:dynamic · HTTP — three endpoints</div>
+      <div class="arch-cell-desc">
+        <code>GET /.well-known/agent.json</code> — serves the AgentCard<br>
+        <code>POST /message/send</code> — handles a synchronous delegation call (blocks until done, returns text)<br>
+        <code>POST /inbox</code> — accepts a room delivery immediately (202), enqueues it into a serialised FIFO. The queue runs one room-turn at a time so a single Ollama instance is never overwhelmed.<br><br>
+        Emits events to Monitor. Registers with Registry. When room-capable, holds a <code>RoomBrokerClient</code> in its tool deps.
+      </div>
+    </div>
+    <div class="arch-cell c-repl">
+      <div class="arch-cell-label">Actor</div>
+      <div class="arch-cell-name">REPL / Human</div>
+      <div class="arch-cell-port">stdin/stdout + dynamic /inbox port</div>
+      <div class="arch-cell-desc">The human-facing entry point. For direct agent calls, sends <code>POST /message/send</code>. For rooms: starts a small Hono <code>/inbox</code> server (dynamic port), registers as a <code>kind:"human"</code> member with the broker, prints deliveries to the terminal, and turns typed lines into <code>POST /rooms/:id/post</code> calls. Human deliveries get a 1-hour deadline — the 120s sweep is for crashed agents.</div>
+    </div>
+  </div>
+
+  <!-- Architecture flow SVG -->
+  <div class="flow-wrap">
+    <div class="flow-header">
+      <div class="flow-dot" style="background:var(--border2)"></div>
+      <span class="flow-title">Startup + connection map — what talks to what</span>
+    </div>
+    <svg class="flow-svg" viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr-mon" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#3a7bff" opacity="0.6"/>
+        </marker>
+        <marker id="arr-reg" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="var(--mon)" opacity="0.6"/>
+        </marker>
+        <marker id="arr-del" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="var(--del)" opacity="0.7"/>
+        </marker>
+        <marker id="arr-room" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="var(--room)" opacity="0.7"/>
+        </marker>
+        <marker id="arr-muted" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="var(--muted)" opacity="0.6"/>
+        </marker>
+      </defs>
+
+      <!-- Background -->
+      <rect width="900" height="320" fill="var(--surface)"/>
+
+      <!-- ── Services row ── -->
+      <!-- Registry -->
+      <rect x="60" y="40" width="130" height="52" rx="4" fill="var(--surface2)" stroke="var(--mon)" stroke-width="1.5"/>
+      <text x="125" y="63" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="#e8e6f2">Registry</text>
+      <text x="125" y="79" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">:7890</text>
+
+      <!-- Monitor -->
+      <rect x="385" y="40" width="130" height="52" rx="4" fill="var(--surface2)" stroke="var(--ret)" stroke-width="1.5"/>
+      <text x="450" y="63" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="#e8e6f2">Monitor</text>
+      <text x="450" y="79" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">:7891</text>
+
+      <!-- Room Broker -->
+      <rect x="710" y="40" width="130" height="52" rx="4" fill="var(--surface2)" stroke="var(--room)" stroke-width="1.5"/>
+      <text x="775" y="63" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="#e8e6f2">Room Broker</text>
+      <text x="775" y="79" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">:7892</text>
+
+      <!-- ── Agents row ── -->
+      <rect x="200" y="175" width="110" height="50" rx="4" fill="var(--surface2)" stroke="var(--del)" stroke-width="1.5"/>
+      <text x="255" y="198" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="#e8e6f2">Agent A</text>
+      <text x="255" y="213" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">:dynamic</text>
+
+      <rect x="390" y="175" width="110" height="50" rx="4" fill="var(--surface2)" stroke="var(--del)" stroke-width="1.5"/>
+      <text x="445" y="198" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="#e8e6f2">Agent B</text>
+      <text x="445" y="213" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">:dynamic</text>
+
+      <!-- ── REPL ── -->
+      <rect x="580" y="175" width="110" height="50" rx="4" fill="var(--surface2)" stroke="var(--muted)" stroke-width="1.5"/>
+      <text x="635" y="198" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="#e8e6f2">REPL</text>
+      <text x="635" y="213" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">stdin + /inbox</text>
+
+      <!-- ── Connections ── -->
+      <!-- Agents register with Registry -->
+      <line x1="255" y1="175" x2="170" y2="92" stroke="var(--mon)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr-reg)" opacity="0.5"/>
+      <line x1="445" y1="175" x2="200" y2="92" stroke="var(--mon)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr-reg)" opacity="0.4"/>
+      <text x="170" y="148" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">register</text>
+
+      <!-- Broker resolves via Registry -->
+      <line x1="710" y1="66" x2="190" y2="66" stroke="var(--mon)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr-reg)" opacity="0.4"/>
+      <text x="380" y="58" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">resolveInbox(name)</text>
+
+      <!-- Agents emit to Monitor -->
+      <line x1="310" y1="200" x2="385" y2="80" stroke="var(--ret)" stroke-width="1" stroke-dasharray="3 4" marker-end="url(#arr-mon)" opacity="0.45"/>
+      <line x1="445" y1="175" x2="450" y2="92" stroke="var(--ret)" stroke-width="1" stroke-dasharray="3 4" marker-end="url(#arr-mon)" opacity="0.45"/>
+      <text x="342" y="132" font-family="JetBrains Mono" font-size="9" fill="var(--muted)" transform="rotate(-55 342 132)">emit events</text>
+
+      <!-- Broker emits to Monitor -->
+      <line x1="775" y1="92" x2="515" y2="80" stroke="var(--ret)" stroke-width="1.2" stroke-dasharray="3 4" marker-end="url(#arr-mon)" opacity="0.5"/>
+      <text x="660" y="74" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">room.* events</text>
+
+      <!-- Broker ↔ Agent A (inbox delivery) -->
+      <path d="M 710,80 Q 560,140 310,175" stroke="var(--room)" stroke-width="1.2" fill="none" marker-end="url(#arr-room)" opacity="0.6"/>
+      <text x="500" y="148" font-family="JetBrains Mono" font-size="9" fill="var(--room)" opacity="0.8">inbox delivery</text>
+
+      <!-- Agent A ↔ Agent B (delegation) -->
+      <line x1="310" y1="200" x2="390" y2="200" stroke="var(--del)" stroke-width="1.5" marker-end="url(#arr-del)" opacity="0.7"/>
+      <text x="350" y="193" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--del)">/message/send</text>
+
+      <!-- Broker ↔ REPL (room commands) -->
+      <line x1="710" y1="80" x2="690" y2="175" stroke="var(--room)" stroke-width="1" fill="none" marker-end="url(#arr-room)" opacity="0.55"/>
+      <text x="718" y="142" font-family="JetBrains Mono" font-size="9" fill="var(--room)" opacity="0.8">commands</text>
+
+      <!-- REPL → agent via /message/send -->
+      <line x1="580" y1="200" x2="500" y2="200" stroke="var(--muted)" stroke-width="1" marker-end="url(#arr-muted)" opacity="0.5"/>
+
+      <!-- Legend -->
+      <line x1="60" y1="280" x2="90" y2="280" stroke="var(--mon)" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="96" y="284" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">registry / discover</text>
+      <line x1="220" y1="280" x2="250" y2="280" stroke="var(--ret)" stroke-width="1" stroke-dasharray="3 4"/>
+      <text x="256" y="284" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">emit to monitor</text>
+      <line x1="380" y1="280" x2="410" y2="280" stroke="var(--del)" stroke-width="1.5"/>
+      <text x="416" y="284" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">delegation (sync)</text>
+      <line x1="560" y1="280" x2="590" y2="280" stroke="var(--room)" stroke-width="1.5"/>
+      <text x="596" y="284" font-family="JetBrains Mono" font-size="9" fill="var(--muted)">room / inbox (async)</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ── 02: DELEGATION ────────────────────────────────────────────────── -->
+<section class="section" id="delegation">
+  <div class="section-num">02 — First primitive</div>
+  <h2><span style="color:var(--del)">Delegation</span><br><span class="dim">Synchronous RPC.</span></h2>
+
+  <div class="two-col-wide">
+    <div class="explain">
+      <div>
+        <h3>You ask. You wait. You get a value back.</h3>
+        <p>Delegation is a <strong style="color:var(--text)">blocking HTTP call</strong> from one agent to another. The caller posts a message to <code>/message/send</code>, blocks on the response, and gets a single text result. The callee sees the request, runs its full tool loop, and returns when done. The caller is frozen until that happens.</p>
+        <p>It's a synchronous RPC. A function call over the network. The shape is hierarchical: there's always a caller up the stack and a callee down it — never true peers.</p>
+      </div>
+
+      <ul class="property-list">
+        <li><span class="prop-key">Shape</span><span class="prop-val">Synchronous — caller blocks until result</span></li>
+        <li><span class="prop-key">Returns</span><span class="prop-val">Yes — a single text value</span></li>
+        <li><span class="prop-key">Topology</span><span class="prop-val">Hierarchical (parent → child → grandchild…)</span></li>
+        <li><span class="prop-key">Loop safety</span><span class="prop-val"><code>x-depth</code> header, capped at max(registered agents)</span></li>
+        <li><span class="prop-key">Parties</span><span class="prop-val">2 — exactly one caller, one callee</span></li>
+        <li><span class="prop-key">State</span><span class="prop-val">KV <code>ContextStore</code> — conversation history per <code>contextId</code></span></li>
+        <li><span class="prop-key">Events</span><span class="prop-val"><code>delegate.start</code> / <code>.continue</code> / <code>.return</code>, <code>turn.started</code> / <code>turn.completed</code></span></li>
+      </ul>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Strengths</h4>
+          <ul>
+            <li>Familiar — works like a function call</li>
+            <li>Returns a structured value</li>
+            <li>Naturally serialised — no race conditions</li>
+            <li>Depth cap prevents infinite loops</li>
+            <li>Trivial to reason about — you always know who's in control</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Limitations</h4>
+          <ul>
+            <li>Caller is completely blocked while waiting</li>
+            <li>Only two parties — no group conversations</li>
+            <li>Depth cap limits delegation chains</li>
+            <li>A→B→A is forbidden (correctly — it's depth ≥ max)</li>
+            <li>Human can't participate in the exchange</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-snippet">
+        <span class="cs-comment">// Agent calls another agent — blocks until result</span><br>
+        <span class="cs-key">const</span> result = <span class="cs-key">await</span> <span class="cs-fn">delegate_start</span>({<br>
+        &nbsp;&nbsp;peer: <span class="cs-str">"code-reviewer"</span>,<br>
+        &nbsp;&nbsp;prompt: <span class="cs-str">"Review this diff: ..."</span><br>
+        });<br>
+        <span class="cs-comment">// result.text is the reviewer's response</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="flow-wrap">
+        <div class="flow-header">
+          <div class="flow-dot" style="background:var(--del)"></div>
+          <span class="flow-title" style="color:var(--del)">Delegation flow — synchronous</span>
+        </div>
+        <svg class="flow-svg" viewBox="0 0 440 330" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="d-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--del)"/>
+            </marker>
+            <marker id="r-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--ret)"/>
+            </marker>
+          </defs>
+          <rect width="440" height="330" fill="var(--surface)"/>
+
+          <!-- Vertical lanes -->
+          <line x1="80"  y1="30" x2="80"  y2="300" stroke="var(--border2)" stroke-width="1" stroke-dasharray="3 5"/>
+          <line x1="220" y1="30" x2="220" y2="300" stroke="var(--border2)" stroke-width="1" stroke-dasharray="3 5"/>
+          <line x1="360" y1="30" x2="360" y2="300" stroke="var(--border2)" stroke-width="1" stroke-dasharray="3 5"/>
+
+          <!-- Lane labels -->
+          <text x="80"  y="22" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="var(--muted)">REPL</text>
+          <text x="220" y="22" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="var(--del)">coordinator</text>
+          <text x="360" y="22" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="var(--del)">sub-agent</text>
+
+          <!-- Call: REPL → coordinator -->
+          <line x1="80" y1="60" x2="208" y2="60" stroke="var(--del)" stroke-width="1.5" marker-end="url(#d-arr)"/>
+          <text x="145" y="55" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--del)">/message/send</text>
+
+          <!-- depth=0 label -->
+          <text x="145" y="72" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--muted)">x-depth: 0</text>
+
+          <!-- coordinator processing box -->
+          <rect x="196" y="80" width="48" height="30" rx="3" fill="var(--del-dim)" stroke="var(--del-mid)" stroke-width="1"/>
+          <text x="220" y="100" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)">tools…</text>
+
+          <!-- Call: coordinator → sub-agent -->
+          <line x1="220" y1="110" x2="220" y2="130" stroke="var(--del)" stroke-width="1" stroke-dasharray="2 2"/>
+          <line x1="220" y1="130" x2="348" y2="130" stroke="var(--del)" stroke-width="1.5" marker-end="url(#d-arr)"/>
+          <text x="288" y="125" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--del)">delegate_start</text>
+          <text x="288" y="142" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--muted)">x-depth: 1</text>
+
+          <!-- BLOCKS annotation -->
+          <rect x="196" y="145" width="48" height="56" rx="3" fill="rgba(224,160,48,0.06)" stroke="var(--del-mid)" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="220" y="168" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)" opacity="0.7">⏳ waiting</text>
+          <text x="220" y="181" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)" opacity="0.7">for result</text>
+          <text x="220" y="194" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)" opacity="0.7">…blocked…</text>
+
+          <!-- sub-agent processing -->
+          <rect x="336" y="145" width="48" height="56" rx="3" fill="var(--del-dim)" stroke="var(--del-mid)" stroke-width="1"/>
+          <text x="360" y="165" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)">running</text>
+          <text x="360" y="178" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)">tool loop</text>
+          <text x="360" y="191" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)">✓ done</text>
+
+          <!-- Return: sub-agent → coordinator -->
+          <line x1="348" y1="215" x2="232" y2="215" stroke="var(--ret)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#r-arr)"/>
+          <text x="290" y="209" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ret)">{ text: "…" }</text>
+
+          <!-- coordinator unblocks -->
+          <rect x="196" y="225" width="48" height="22" rx="3" fill="var(--del-dim)" stroke="var(--del-mid)" stroke-width="1"/>
+          <text x="220" y="241" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--del)">unblocked</text>
+
+          <!-- Return: coordinator → REPL -->
+          <line x1="208" y1="259" x2="92" y2="259" stroke="var(--ret)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#r-arr)"/>
+          <text x="150" y="252" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--ret)">final text</text>
+
+          <!-- Animated packets -->
+          <circle r="3.5" fill="var(--del)" opacity="0.9">
+            <animateMotion dur="3.5s" repeatCount="indefinite" begin="0s">
+              <mpath href="#path-d1"/>
+            </animateMotion>
+          </circle>
+          <circle r="3.5" fill="var(--del)" opacity="0.9">
+            <animateMotion dur="3.5s" repeatCount="indefinite" begin="0.7s">
+              <mpath href="#path-d2"/>
+            </animateMotion>
+          </circle>
+          <circle r="3" fill="var(--ret)" opacity="0.9">
+            <animateMotion dur="3.5s" repeatCount="indefinite" begin="1.6s">
+              <mpath href="#path-r1"/>
+            </animateMotion>
+          </circle>
+          <circle r="3" fill="var(--ret)" opacity="0.9">
+            <animateMotion dur="3.5s" repeatCount="indefinite" begin="2.2s">
+              <mpath href="#path-r2"/>
+            </animateMotion>
+          </circle>
+
+          <!-- Hidden paths for animateMotion -->
+          <path id="path-d1" d="M80,60 L220,60" fill="none"/>
+          <path id="path-d2" d="M220,130 L360,130" fill="none"/>
+          <path id="path-r1" d="M360,215 L220,215" fill="none"/>
+          <path id="path-r2" d="M220,259 L80,259" fill="none"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 03: ROOMS ────────────────────────────────────────────────────── -->
+<section class="section" id="rooms">
+  <div class="section-num">03 — Second primitive</div>
+  <h2><span style="color:var(--room)">Rooms</span><br><span class="dim">Async group conversation.</span></h2>
+
+  <div class="two-col-wide">
+    <div class="explain">
+      <div>
+        <h3>Post and move on. Others reply in their own time.</h3>
+        <p>A room is an <strong style="color:var(--text)">async, multi-party conversation channel</strong> brokered by the Room Broker. Any member can address any other member. Nobody blocks on a reply. A "turn" is just a message delivery — the recipient wakes up, processes it, and may or may not reply.</p>
+        <p>The broker is the single source of truth for membership, the canonical transcript, and delivery accounting. An agent posts to the broker; the broker pushes it to each addressed member's <code>/inbox</code>. The poster gets an immediate <code>202</code> and moves on — there is no return value.</p>
+      </div>
+
+      <ul class="property-list">
+        <li><span class="prop-key">Shape</span><span class="prop-val">Async — fire-and-forget posts, no blocking</span></li>
+        <li><span class="prop-key">Returns</span><span class="prop-val">No — participation is the point, not a result</span></li>
+        <li><span class="prop-key">Topology</span><span class="prop-val">Peer-to-peer, N-party via a central broker</span></li>
+        <li><span class="prop-key">Loop safety</span><span class="prop-val">Turn count cap (<code>maxTurns</code>, default 24)</span></li>
+        <li><span class="prop-key">Parties</span><span class="prop-val">N members — agents + humans, all equal</span></li>
+        <li><span class="prop-key">State</span><span class="prop-val">Broker KV — transcript, deliveries, membership</span></li>
+        <li><span class="prop-key">Events</span><span class="prop-val"><code>room.created</code>, <code>room.post</code>, <code>room.idle</code>, <code>room.capped</code>, <code>room.closed</code>…</span></li>
+      </ul>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Strengths</h4>
+          <ul>
+            <li>Multi-party — any N agents + humans</li>
+            <li>Nobody blocks — agents stay responsive</li>
+            <li>Human is a first-class participant</li>
+            <li>Natural for debate / brainstorm / collaboration</li>
+            <li>Serialised per-agent — only one room turn at a time</li>
+            <li>Broker is the durable source of truth</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Limitations</h4>
+          <ul>
+            <li>No return value — callers can't await a result</li>
+            <li>Extra hop through the broker on every message</li>
+            <li>Broker is a required dependency</li>
+            <li>More complex to observe (turn order is broker-authoritative)</li>
+            <li>Addressed turns only — broadcast storms avoided by design</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-snippet">
+        <span class="cs-comment">// Create a room and start a conversation</span><br>
+        <span class="cs-key">const</span> { roomId } = <span class="cs-key">await</span> <span class="cs-fn">create_room</span>({<br>
+        &nbsp;&nbsp;title: <span class="cs-str">"hotdog debate"</span>,<br>
+        &nbsp;&nbsp;members: [<span class="cs-str">"analyst"</span>, <span class="cs-str">"code-reviewer"</span>]<br>
+        });<br>
+        <span class="cs-comment">// Post to specific members — no blocking</span><br>
+        <span class="cs-key">await</span> <span class="cs-fn">post</span>({ roomId, text: <span class="cs-str">"Is a hotdog a sandwich?"</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;to: [<span class="cs-str">"analyst"</span>] });
+      </div>
+    </div>
+
+    <div>
+      <div class="flow-wrap">
+        <div class="flow-header">
+          <div class="flow-dot" style="background:var(--room)"></div>
+          <span class="flow-title" style="color:var(--room)">Room flow — async fanout</span>
+        </div>
+        <svg class="flow-svg" viewBox="0 0 440 370" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="rm-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--room)"/>
+            </marker>
+          </defs>
+          <rect width="440" height="370" fill="var(--surface)"/>
+
+          <!-- Broker box (center-top) -->
+          <rect x="155" y="30" width="130" height="52" rx="4" fill="var(--room-dim)" stroke="var(--room)" stroke-width="1.5"/>
+          <text x="220" y="54" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="500" fill="var(--room)">Room Broker</text>
+          <text x="220" y="70" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--text2)">:7892</text>
+
+          <!-- Spokes from broker -->
+          <line x1="180" y1="82" x2="100" y2="155" stroke="var(--room)" stroke-width="1" stroke-dasharray="3 4" opacity="0.5"/>
+          <line x1="220" y1="82" x2="220" y2="155" stroke="var(--room)" stroke-width="1" stroke-dasharray="3 4" opacity="0.5"/>
+          <line x1="260" y1="82" x2="340" y2="155" stroke="var(--room)" stroke-width="1" stroke-dasharray="3 4" opacity="0.5"/>
+
+          <!-- Agent A -->
+          <rect x="44" y="155" width="112" height="44" rx="4" fill="var(--surface2)" stroke="var(--del)" stroke-width="1.5"/>
+          <text x="100" y="175" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="500" fill="#e8e6f2">analyst</text>
+          <text x="100" y="189" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--text2)">/inbox</text>
+
+          <!-- Agent B -->
+          <rect x="164" y="155" width="112" height="44" rx="4" fill="var(--surface2)" stroke="var(--del)" stroke-width="1.5"/>
+          <text x="220" y="175" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="500" fill="#e8e6f2">code-reviewer</text>
+          <text x="220" y="189" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--text2)">/inbox</text>
+
+          <!-- Human -->
+          <rect x="284" y="155" width="112" height="44" rx="4" fill="var(--surface2)" stroke="var(--muted)" stroke-width="1.5"/>
+          <text x="340" y="175" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="500" fill="#e8e6f2">human</text>
+          <text x="340" y="189" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--text2)">REPL /inbox</text>
+
+          <!-- Step annotations -->
+          <text x="20" y="228" font-family="JetBrains Mono" font-size="9" fill="var(--room)" opacity="0.7">① analyst posts</text>
+          <line x1="100" y1="199" x2="180" y2="250" stroke="var(--room)" stroke-width="1.2" marker-end="url(#rm-arr)" opacity="0.7"/>
+          <text x="122" y="248" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--room)">room.post</text>
+
+          <text x="152" y="295" font-family="JetBrains Mono" font-size="9" fill="var(--room)" opacity="0.7">② broker fans out</text>
+          <rect x="155" y="258" width="130" height="36" rx="3" fill="var(--room-dim)" stroke="var(--room-mid)" stroke-width="1"/>
+          <text x="220" y="276" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--room)">seq++, deliver to</text>
+          <text x="220" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--room)">to: [code-reviewer]</text>
+
+          <text x="265" y="228" font-family="JetBrains Mono" font-size="9" fill="var(--room)" opacity="0.7">③ inbox → 202</text>
+          <line x1="285" y1="258" x2="285" y2="199" stroke="var(--room)" stroke-width="1.2" marker-end="url(#rm-arr)" opacity="0.7" stroke-dasharray="4 3"/>
+
+          <!-- reply arrow back -->
+          <text x="20" y="340" font-family="JetBrains Mono" font-size="9" fill="var(--ret)" opacity="0.8">④ reply: post() from code-reviewer → broker → analyst inbox</text>
+          <line x1="340" y1="199" x2="350" y2="258" stroke="var(--room)" stroke-width="1" opacity="0.4" stroke-dasharray="3 4"/>
+
+          <!-- Animated packets -->
+          <circle r="3" fill="var(--room)" opacity="0.85">
+            <animateMotion dur="3s" repeatCount="indefinite" begin="0s">
+              <mpath href="#rm-path1"/>
+            </animateMotion>
+          </circle>
+          <circle r="3" fill="var(--room)" opacity="0.85">
+            <animateMotion dur="3s" repeatCount="indefinite" begin="0.6s">
+              <mpath href="#rm-path2"/>
+            </animateMotion>
+          </circle>
+          <circle r="3" fill="var(--room)" opacity="0.85">
+            <animateMotion dur="3s" repeatCount="indefinite" begin="1.3s">
+              <mpath href="#rm-path3"/>
+            </animateMotion>
+          </circle>
+          <circle r="3" fill="var(--room)" opacity="0.85">
+            <animateMotion dur="3s" repeatCount="indefinite" begin="2.1s">
+              <mpath href="#rm-path4"/>
+            </animateMotion>
+          </circle>
+
+          <path id="rm-path1" d="M100,199 Q160,240 220,258" fill="none"/>
+          <path id="rm-path2" d="M220,258 Q220,220 220,199" fill="none"/>
+          <path id="rm-path3" d="M220,258 Q282,240 340,199" fill="none"/>
+          <path id="rm-path4" d="M285,199 Q250,230 220,258" fill="none"/>
+        </svg>
+      </div>
+
+      <div style="margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:16px;">
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Termination conditions</div>
+        <ul style="list-style:none;">
+          <li style="padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; color:var(--text2); display:flex; gap:8px;">
+            <span style="color:var(--room)">idle</span>
+            <span>No pending deliveries — a turn addressed no one. Room stays open.</span>
+          </li>
+          <li style="padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; color:var(--text2); display:flex; gap:8px;">
+            <span style="color:var(--room)">leave</span>
+            <span>A member calls <code>leave()</code>. Auto-closes when &lt;2 active members remain.</span>
+          </li>
+          <li style="padding:5px 0; font-size:12px; color:var(--text2); display:flex; gap:8px;">
+            <span style="color:var(--room)">capped</span>
+            <span><code>turnCount ≥ maxTurns</code> (default 24). Broker rejects further posts. Room stays open.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 04: COMPARISON ───────────────────────────────────────────────── -->
+<section class="section" id="compare">
+  <div class="section-num">04 — Side by side</div>
+  <h2>Same agents.<br><span class="dim">Different shape.</span></h2>
+
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Property</th>
+        <th>delegation</th>
+        <th>rooms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Interaction model</td>
+        <td>Synchronous RPC — caller blocks</td>
+        <td>Async mailbox — fire and forget</td>
+      </tr>
+      <tr>
+        <td>Returns a value?</td>
+        <td class="yes">Yes — the callee's text reply</td>
+        <td class="no">No — participation is the point</td>
+      </tr>
+      <tr>
+        <td>Parties</td>
+        <td>Exactly 2: one caller, one callee</td>
+        <td>N members — unlimited, any mix</td>
+      </tr>
+      <tr>
+        <td>Topology</td>
+        <td>Hierarchical (parent → child)</td>
+        <td>Peer, multi-party via broker</td>
+      </tr>
+      <tr>
+        <td>Loop safety</td>
+        <td><code>x-depth</code> header — call-stack cap</td>
+        <td><code>maxTurns</code> — turn count cap</td>
+      </tr>
+      <tr>
+        <td>Human participation</td>
+        <td class="no">No — REPL is caller-only</td>
+        <td class="yes">Yes — first-class <code>kind:"human"</code> member</td>
+      </tr>
+      <tr>
+        <td>Caller blocks?</td>
+        <td class="no">Yes — fully blocked during callee's turn</td>
+        <td class="yes">Never — inbox returns 202 immediately</td>
+      </tr>
+      <tr>
+        <td>Message ordering</td>
+        <td>Implicit in call stack</td>
+        <td>Broker-assigned <code>seq</code> — authoritative</td>
+      </tr>
+      <tr>
+        <td>State location</td>
+        <td>Agent KV (<code>ContextStore</code> per <code>contextId</code>)</td>
+        <td>Broker KV (transcript + deliveries)</td>
+      </tr>
+      <tr>
+        <td>Observable as</td>
+        <td><code>delegate.start</code> / <code>delegate.return</code></td>
+        <td><code>room.post</code> / <code>room.idle</code> / <code>room.closed</code></td>
+      </tr>
+      <tr>
+        <td>When it ends</td>
+        <td>Callee returns — result propagates up the stack</td>
+        <td>Idle / explicit leave / turn cap</td>
+      </tr>
+      <tr>
+        <td>Use when</td>
+        <td>"Do this task, give me the result"</td>
+        <td>"Let's discuss / debate / collaborate"</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── 05: WHEN TO USE ──────────────────────────────────────────────── -->
+<section class="section" id="decide">
+  <div class="section-num">05 — The rule</div>
+  <h2>One question<br><span class="dim">to choose between them.</span></h2>
+
+  <div class="decision-row">
+    <div class="decision-card del-card">
+      <div class="dc-q">"Do you need a value back?"</div>
+      <div class="dc-rule">
+        The callee's answer will be used directly by the caller — as a summary, a decision, a processed result. The caller can't continue until it has that value. You need the classic <strong>request / response</strong> shape.
+      </div>
+      <div class="dc-examples">
+        <span class="dc-example">summarize this doc</span>
+        <span class="dc-example">review this diff</span>
+        <span class="dc-example">search the web for X</span>
+        <span class="dc-example">translate this text</span>
+        <span class="dc-example">extract structured data</span>
+      </div>
+    </div>
+    <div class="decision-vs">or</div>
+    <div class="decision-card room-card">
+      <div class="dc-q">"Is the exchange itself the point?"</div>
+      <div class="dc-rule">
+        No single answer is expected back. You want agents to argue, explore, build on each other's ideas, or include a human in the loop. The conversation produces value — not any one turn's output.
+      </div>
+      <div class="dc-examples">
+        <span class="dc-example">debate this proposal</span>
+        <span class="dc-example">brainstorm approaches</span>
+        <span class="dc-example">code review + discussion</span>
+        <span class="dc-example">multi-agent roleplay</span>
+        <span class="dc-example">human in the loop</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule-box">
+    <div class="rule-icon">◈</div>
+    <div class="rule-text">
+      The system prompt guidance is: <span class="rule-highlight del-hl">"need a value back → delegate_*"</span>&nbsp;&nbsp;·&nbsp;&nbsp;<span class="rule-highlight room-hl">"want an open-ended exchange → open a room"</span>.
+      Both primitives are always available to tool-capable agents. They are complementary — not competing — and you'll often see both in a single session: a coordinator <em>delegates</em> to a researcher, then <em>opens a room</em> with the analyst and a human to discuss the findings.
+    </div>
+  </div>
+
+  <!-- Quick-reference event types -->
+  <div style="margin-top:48px;">
+    <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">All event types — both primitives</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div style="background:var(--surface);border:1px solid var(--del-mid);border-radius:6px;padding:16px 18px;">
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--del);margin-bottom:10px;">Delegation events</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <code>delegate.start</code><code>delegate.continue</code><code>delegate.return</code>
+          <code>turn.started</code><code>turn.completed</code><code>message.completed</code>
+          <code>tool.call</code><code>spawn</code><code>error</code>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--room-mid);border-radius:6px;padding:16px 18px;">
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--room);margin-bottom:10px;">Room events (broker-emitted)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <code>room.created</code><code>room.invited</code><code>room.post</code>
+          <code>room.ack</code><code>room.left</code><code>room.idle</code>
+          <code>room.capped</code><code>room.turn_timeout</code><code>room.delivery_failed</code><code>room.closed</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>A2A — agent-rooms-monitor branch</span>
+  <span style="color:var(--border2)">·</span>
+  <span>Delegation <span style="color:var(--del)">▪</span> &nbsp; Rooms <span style="color:var(--room)">▪</span></span>
+</footer>
+
+</body>
+</html>
