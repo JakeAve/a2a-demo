@@ -1,8 +1,9 @@
 // Role presets define what an agent IS (which backend, which model, which
-// personality, which skills it advertises). Each role lives in its own
-// JSON file under `agents/`. The filename (minus `.json`) becomes the role
-// name. `loadRoles()` reads the directory at startup, validates each file,
-// and returns a strictly-typed map.
+// personality, which skills it advertises). The roster lives in a single
+// JSON file: `agents.default.json` (committed). An optional gitignored
+// `agents.json` fully replaces it when present. Each top-level key is a role
+// name. `loadRoles()` reads the active file at startup, strips $schema, and
+// validates each preset into a strictly-typed map.
 
 import type { Skill } from "./protocol/types.ts";
 
@@ -67,28 +68,56 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
   };
 }
 
-export async function loadRoles(dir = "agents"): Promise<Record<string, RolePreset>> {
-  const roles: Record<string, RolePreset> = {};
-  let entries;
+export type LoadRolesOptions = {
+  /** Local override file; when it exists it fully replaces the default. */
+  overridePath?: string;
+  /** Committed default roster file. */
+  defaultPath?: string;
+};
+
+async function fileExists(path: string): Promise<boolean> {
   try {
-    entries = await Array.fromAsync(Deno.readDir(dir));
+    return (await Deno.stat(path)).isFile;
   } catch (e) {
-    throw new Error(`could not read agents directory "${dir}": ${(e as Error).message}`);
+    if (e instanceof Deno.errors.NotFound) return false;
+    throw e;
   }
-  for (const entry of entries) {
-    if (!entry.isFile || !entry.name.endsWith(".json")) continue;
-    if (entry.name.startsWith("role.schema")) continue;
-    const path = `${dir}/${entry.name}`;
-    const name = entry.name.slice(0, -".json".length);
-    let raw;
-    try {
-      raw = JSON.parse(await Deno.readTextFile(path));
-    } catch (e) {
-      throw new Error(`${path}: invalid JSON: ${(e as Error).message}`);
-    }
-    // Strip $schema if present (used by editors for autocomplete).
-    if (raw && typeof raw === "object") delete raw.$schema;
-    roles[name] = validateRolePreset(raw, path);
+}
+
+export async function loadRoles(
+  opts: LoadRolesOptions = {},
+): Promise<Record<string, RolePreset>> {
+  const overridePath = opts.overridePath ?? "agents.json";
+  const defaultPath = opts.defaultPath ?? "agents.default.json";
+
+  // The override fully replaces the default when present — no merge.
+  const path = (await fileExists(overridePath)) ? overridePath : defaultPath;
+
+  let text: string;
+  try {
+    text = await Deno.readTextFile(path);
+  } catch (e) {
+    throw new Error(`could not read agents file "${path}": ${(e as Error).message}`);
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`${path}: invalid JSON: ${(e as Error).message}`);
+  }
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`${path}: expected a JSON object mapping role name to preset`);
+  }
+
+  const obj = raw as Record<string, unknown>;
+  // Strip $schema (used by editors for autocomplete), not a role.
+  delete obj.$schema;
+
+  const roles: Record<string, RolePreset> = {};
+  for (const [name, value] of Object.entries(obj)) {
+    roles[name] = validateRolePreset(value, `${path}#${name}`);
   }
   return roles;
 }
