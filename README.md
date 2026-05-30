@@ -21,6 +21,27 @@ In the REPL:
 `@<name>` routes a prompt to that agent. Streaming token output and live
 `· tool_name{args}` events appear inline.
 
+## Development
+
+Run this once after cloning to enable the git hooks:
+
+    deno task setup
+
+It points git at `.githooks/` (via `core.hooksPath`) and marks the hooks
+executable. The setting is local to your clone (not checked in), so each
+contributor runs it once.
+
+| Task | Runs |
+|---|---|
+| `deno task check` | `deno fmt --check`, `deno lint`, and `deno check` |
+| `deno task test` | full test suite (unit + e2e) |
+| `deno task test:unit` | unit tests only (excludes `tests/e2e/`, the `*e2e*` files) |
+| `deno task pre-commit` | `check` + unit tests — runs on every commit |
+| `deno task pre-push` | `check` + full test suite — runs on every push |
+
+`pre-commit` stays fast by skipping the network/Ollama-dependent e2e tests;
+those run at `pre-push`. Bypass a hook with `--no-verify` when you need to.
+
 ## Agents
 
 The roster lives in **`agents.default.json`** (committed) — a JSON object

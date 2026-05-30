@@ -4,7 +4,17 @@
     "start:agent": "deno run -A --unstable-kv --env-file=.env src/agent-entry.ts",
     "mcp": "deno run -A --unstable-kv --env-file=.env src/mcp.ts",
     "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv",
-    "monitor": "deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv --env-file=.env monitor/main.ts"
+    "test:unit": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv --ignore=tests/e2e/,tests/repl-e2e.test.ts,tests/rooms/e2e.test.ts",
+    "monitor": "deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv --env-file=.env monitor/main.ts",
+    "check": "deno fmt --check . && deno lint . && deno check src tests monitor/*.ts scripts",
+    "pre-commit": "deno task check && deno task test:unit",
+    "pre-push": "deno task check && deno task test",
+    "setup": "git config core.hooksPath .githooks && chmod +x .githooks/pre-commit .githooks/pre-push"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["require-await"]
+    }
   },
   "imports": {
     "@std/dotenv": "jsr:@std/dotenv@^0.225.3",
