@@ -212,13 +212,16 @@ final text (no token streaming over MCP).
 
 `.env` (see `.env.example`):
 
-| Variable             | Default                      | Purpose                                                |
-| -------------------- | ---------------------------- | ------------------------------------------------------ |
-| `REGISTRY_PORT`      | `7890`                       | Registry's fixed port                                  |
-| `ANTHROPIC_API_KEY`  | —                            | Required for any Claude-backed agent                   |
-| `AGENT_BEARER_TOKEN` | `local-dev-secret`           | Shared secret on all A2A calls                         |
-| `OLLAMA_BASE_URL`    | `http://localhost:11434`     | Where to find Ollama                                   |
-| `A2A_MONITOR_URL`    | _(unset — monitor disabled)_ | Point agents at a running monitor for swimlane tracing |
+| Variable                  | Default                       | Purpose                                                                        |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------------------------ |
+| `REGISTRY_PORT`           | `7890`                        | Registry's fixed port                                                          |
+| `ANTHROPIC_API_KEY`       | —                             | Required for any `claude`-backed agent; fallback for `claude-code`             |
+| `CLAUDE_CODE_OAUTH_TOKEN` | —                             | Preferred auth for `claude-code` agents (`claude setup-token`)                 |
+| `AGENT_BEARER_TOKEN`      | `local-dev-secret`            | Shared secret on all A2A calls                                                 |
+| `OLLAMA_BASE_URL`         | `http://localhost:11434`      | Where to find Ollama                                                           |
+| `OLLAMA_API_KEY`          | _(unset — no Ollama search)_  | Enables `web_search` for tool-capable Ollama agents with `webSearch: true`     |
+| `A2A_MONITOR_URL`         | _(unset — monitor disabled)_  | Point agents at a running monitor for swimlane tracing                         |
+| `A2A_MAX_DEPTH`           | `0` _(pegged to agent count)_ | Force a fixed max delegation depth (e.g. `2`); `0`/unset scales with the swarm |
 
 ## Design + roadmap
 

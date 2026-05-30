@@ -47,7 +47,7 @@
       },
       "webSearch": {
         "type": "boolean",
-        "description": "Claude backend only: expose Anthropic's server-side web_search tool."
+        "description": "Expose a web_search tool to this agent. claude backend: uses Anthropic's server-side web_search. ollama backend: uses Ollama's hosted search API (requires toolCapable:true and OLLAMA_API_KEY in the env, else silently absent). Ignored by claude-code, which has its own web tools."
       }
     }
   }

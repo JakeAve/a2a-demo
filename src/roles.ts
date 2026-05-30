@@ -19,7 +19,9 @@ export type RolePreset = {
   // delegate_start, ...). Claude is always tool-capable; for Ollama, only
   // set this if the model actually supports function calling.
   toolCapable?: boolean;
-  // Claude backend only: expose Anthropic's server-side web_search tool.
+  // Expose a web_search tool. claude backend uses Anthropic's server-side
+  // web_search; a tool-capable ollama backend uses Ollama's hosted search API
+  // (needs OLLAMA_API_KEY, else silently absent). Ignored by claude-code.
   webSearch?: boolean;
 };
 
