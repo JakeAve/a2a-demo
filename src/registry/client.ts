@@ -14,9 +14,12 @@ export class RegistryClient {
   }
 
   async deregister(name: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/register/${encodeURIComponent(name)}`, {
-      method: "DELETE",
-    });
+    const res = await fetch(
+      `${this.baseUrl}/register/${encodeURIComponent(name)}`,
+      {
+        method: "DELETE",
+      },
+    );
     await res.body?.cancel();
   }
 
@@ -32,7 +35,9 @@ export class RegistryClient {
 
   async get(name: string): Promise<AgentCard | null> {
     try {
-      const res = await fetch(`${this.baseUrl}/agents/${encodeURIComponent(name)}`);
+      const res = await fetch(
+        `${this.baseUrl}/agents/${encodeURIComponent(name)}`,
+      );
       if (!res.ok) return null;
       return await res.json();
     } catch {

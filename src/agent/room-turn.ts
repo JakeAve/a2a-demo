@@ -12,16 +12,18 @@ export type RoomTurnDeps = {
   selfName: string;
   handler: (ctx: AgentHandlerCtx) => Promise<{ text: string }>;
   rooms: RoomBrokerClient;
-  roomTurn: RoomTurnState;       // the SAME object wired into ToolDeps
+  roomTurn: RoomTurnState; // the SAME object wired into ToolDeps
   store: ContextStore;
 };
 
 export function renderRoomTurn(d: InboxDelivery, selfName: string): string {
   const lines = d.transcript.map((m) =>
-    `[${m.from}${m.to.length ? " → " + m.to.join(", ") : ""}]: ${m.text}`,
+    `[${m.from}${m.to.length ? " → " + m.to.join(", ") : ""}]: ${m.text}`
   ).join("\n");
   return [
-    `You are "${selfName}" in the room "${d.title}". Members: ${d.members.join(", ")}.`,
+    `You are "${selfName}" in the room "${d.title}". Members: ${
+      d.members.join(", ")
+    }.`,
     ``,
     `Transcript so far:`,
     lines || "(empty)",
@@ -34,7 +36,12 @@ export function renderRoomTurn(d: InboxDelivery, selfName: string): string {
 
 export function makeRoomTurnProcessor(deps: RoomTurnDeps) {
   return async function processDelivery(d: InboxDelivery): Promise<void> {
-    deps.roomTurn.active = { roomId: d.roomId, turnId: d.turnId, addressedBy: d.addressedBy, posted: false };
+    deps.roomTurn.active = {
+      roomId: d.roomId,
+      turnId: d.turnId,
+      addressedBy: d.addressedBy,
+      posted: false,
+    };
     const contextId = crypto.randomUUID(); // ephemeral; the transcript IS the context
     try {
       const ctx: AgentHandlerCtx = {
@@ -42,7 +49,8 @@ export function makeRoomTurnProcessor(deps: RoomTurnDeps) {
         sessionId: d.sessionId ?? "",
         requestId: d.roomId,
         message: {
-          messageId: crypto.randomUUID(), role: "user",
+          messageId: crypto.randomUUID(),
+          role: "user",
           parts: [{ type: "text", text: renderRoomTurn(d, deps.selfName) }],
           contextId,
         },
@@ -50,12 +58,26 @@ export function makeRoomTurnProcessor(deps: RoomTurnDeps) {
       const res = await deps.handler(ctx);
       if (!deps.roomTurn.active.posted) {
         const text = (res.text ?? "").trim();
-        if (text) await deps.rooms.post(d.roomId, { from: deps.selfName, text, to: [d.addressedBy], turnId: d.turnId });
-        else await deps.rooms.ack(d.roomId, { from: deps.selfName, turnId: d.turnId });
+        if (text) {
+          await deps.rooms.post(d.roomId, {
+            from: deps.selfName,
+            text,
+            to: [d.addressedBy],
+            turnId: d.turnId,
+          });
+        } else {await deps.rooms.ack(d.roomId, {
+            from: deps.selfName,
+            turnId: d.turnId,
+          });}
       }
     } catch {
       // Never leave a delivery pending — resolve it so the room can idle/recover.
-      try { await deps.rooms.ack(d.roomId, { from: deps.selfName, turnId: d.turnId }); } catch { /* ignore */ }
+      try {
+        await deps.rooms.ack(d.roomId, {
+          from: deps.selfName,
+          turnId: d.turnId,
+        });
+      } catch { /* ignore */ }
     } finally {
       deps.roomTurn.active = null;
       await deps.store.clear(contextId); // drop the throwaway context

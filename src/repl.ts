@@ -29,7 +29,9 @@ export type ClassifyOpts = {
 };
 
 // "@A @B hello" -> { to: ["A","B"], rest: "hello" }
-export function parseLeadingMentions(line: string): { to: string[]; rest: string } {
+export function parseLeadingMentions(
+  line: string,
+): { to: string[]; rest: string } {
   const to: string[] = [];
   let rest = line.trim();
   let m: RegExpMatchArray | null;
@@ -51,9 +53,15 @@ export function classifyLine(raw: string, opts: ClassifyOpts): Classified {
     if (rest === "leave") return { kind: "roomLeave" };
     if (rest === "log") return { kind: "roomLog" };
     if (rest.startsWith("new")) {
-      const tokens = rest.slice("new".length).trim().split(/\s+/).filter(Boolean);
-      if (tokens.length < 2) return { kind: "hint", message: "usage: :room new <title> <a,b,...>" };
-      const members = tokens.pop()!.split(",").map((s) => s.trim()).filter(Boolean);
+      const tokens = rest.slice("new".length).trim().split(/\s+/).filter(
+        Boolean,
+      );
+      if (tokens.length < 2) {
+        return { kind: "hint", message: "usage: :room new <title> <a,b,...>" };
+      }
+      const members = tokens.pop()!.split(",").map((s) => s.trim()).filter(
+        Boolean,
+      );
       const title = tokens.join(" ");
       if (!title || members.length === 0) {
         return { kind: "hint", message: "usage: :room new <title> <a,b,...>" };
@@ -62,10 +70,15 @@ export function classifyLine(raw: string, opts: ClassifyOpts): Classified {
     }
     if (rest.startsWith("join")) {
       const roomId = rest.slice("join".length).trim();
-      if (!roomId) return { kind: "hint", message: "usage: :room join <roomId>" };
+      if (!roomId) {
+        return { kind: "hint", message: "usage: :room join <roomId>" };
+      }
       return { kind: "roomJoin", roomId };
     }
-    return { kind: "hint", message: "commands: :rooms, :room new|join|leave|log" };
+    return {
+      kind: "hint",
+      message: "commands: :rooms, :room new|join|leave|log",
+    };
   }
 
   const at = line.match(/^@(\S+)\s+(.+)$/);
@@ -77,7 +90,9 @@ export function classifyLine(raw: string, opts: ClassifyOpts): Classified {
       return { kind: "roomPost", to: parsed.to, text: parsed.rest };
     }
     // A known agent that is NOT a focused member => direct-send escape (focused or not).
-    if (opts.knownAgents.has(first)) return { kind: "direct", agent: first, prompt: restText };
+    if (opts.knownAgents.has(first)) {
+      return { kind: "direct", agent: first, prompt: restText };
+    }
     // Focused but unknown @name => treat as a room recipient (broker drops unknowns).
     if (opts.focusedRoomId) {
       const parsed = parseLeadingMentions(line);
@@ -93,7 +108,9 @@ export function classifyLine(raw: string, opts: ClassifyOpts): Classified {
   }
   return {
     kind: "hint",
-    message: `(use @<agent> <prompt>; known: ${[...opts.knownAgents].join(", ")})`,
+    message: `(use @<agent> <prompt>; known: ${
+      [...opts.knownAgents].join(", ")
+    })`,
   };
 }
 
@@ -128,13 +145,22 @@ export function startReplInbox(opts: {
   app.post("/inbox", async (c) => {
     // Empty token disables auth (matches the broker's convention in rooms/server.ts).
     const authz = c.req.header("authorization") ?? "";
-    if (opts.token && authz !== `Bearer ${opts.token}`) return c.json({ error: "unauthorized" }, 401);
+    if (opts.token && authz !== `Bearer ${opts.token}`) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
     let body: unknown;
-    try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "bad json" }, 400);
+    }
     queue.enqueue(body as InboxDelivery);
     return c.json({ ok: true }, 202);
   });
-  const server = Deno.serve({ port: opts.port ?? 0, onListen: () => {} }, app.fetch);
+  const server = Deno.serve(
+    { port: opts.port ?? 0, onListen: () => {} },
+    app.fetch,
+  );
   const port = (server.addr as Deno.NetAddr).port;
   return {
     url: `http://localhost:${port}`,
@@ -168,14 +194,18 @@ async function* stdinLines(): AsyncGenerator<string> {
 
 export async function runRepl(deps: ReplDeps): Promise<void> {
   const enc = new TextEncoder();
-  const write = deps.output ?? ((s: string) => { Deno.stdout.writeSync(enc.encode(s)); });
+  const write = deps.output ?? ((s: string) => {
+    Deno.stdout.writeSync(enc.encode(s));
+  });
   const input = deps.input ?? stdinLines();
   const contextId = crypto.randomUUID();
   const sessionId = contextId; // session == driver run
   const emit: Emitter = deps.emit ?? (() => Promise.resolve());
   const humanName = deps.humanName ?? "human";
   const rooms = deps.roomsClient ??
-    (deps.roomBrokerUrl ? new RoomBrokerClient(deps.roomBrokerUrl, deps.bearerToken) : undefined);
+    (deps.roomBrokerUrl
+      ? new RoomBrokerClient(deps.roomBrokerUrl, deps.bearerToken)
+      : undefined);
   const knownAgents = new Set(deps.agents.keys());
 
   // ---- Room state ----
@@ -192,7 +222,10 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
         token: deps.bearerToken,
         port: deps.inboxPort,
         onDelivery: (d) => {
-          pending.set(d.roomId, { turnId: d.turnId, addressedBy: d.addressedBy });
+          pending.set(d.roomId, {
+            turnId: d.turnId,
+            addressedBy: d.addressedBy,
+          });
           if (d.roomId === focusedRoomId) {
             focusedMembers = new Set(d.members);
             focusedTitle = d.title;
@@ -208,33 +241,53 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
     const got = await rooms?.get(roomId);
     if (got) {
       focusedTitle = got.room.title;
-      focusedMembers = new Set(got.room.members.filter((m) => m.active).map((m) => m.name));
+      focusedMembers = new Set(
+        got.room.members.filter((m) => m.active).map((m) => m.name),
+      );
     }
   };
 
   // ---- Direct send to an agent (existing behavior, unchanged) ----
   const directSend = async (name: string, prompt: string) => {
     const card = deps.agents.get(name);
-    if (!card) { write(`unknown agent: ${name}\n`); return; }
+    if (!card) {
+      write(`unknown agent: ${name}\n`);
+      return;
+    }
     const requestId = crypto.randomUUID();
     void emit({
-      sessionId, requestId, agent: "REPL", depth: 0, ts: now(),
-      type: "request.started", data: { target: name, prompt },
+      sessionId,
+      requestId,
+      agent: "REPL",
+      depth: 0,
+      ts: now(),
+      type: "request.started",
+      data: { target: name, prompt },
     });
     write(`[${name}] `);
     const startedTs = now();
     try {
-      for await (const ev of streamMessage({
-        url: card.url, token: deps.bearerToken, depth: 0, sessionId, requestId,
-        message: {
-          messageId: crypto.randomUUID(), role: "user",
-          parts: [{ type: "text", text: prompt }], contextId,
-        },
-      })) {
+      for await (
+        const ev of streamMessage({
+          url: card.url,
+          token: deps.bearerToken,
+          depth: 0,
+          sessionId,
+          requestId,
+          message: {
+            messageId: crypto.randomUUID(),
+            role: "user",
+            parts: [{ type: "text", text: prompt }],
+            contextId,
+          },
+        })
+      ) {
         if (ev.type === "delta") write(ev.text);
         else if (ev.type === "tool") {
           const argsStr = JSON.stringify(ev.args);
-          const compact = argsStr.length > 80 ? argsStr.slice(0, 77) + "…" : argsStr;
+          const compact = argsStr.length > 80
+            ? argsStr.slice(0, 77) + "…"
+            : argsStr;
           write(`\n  · ${ev.name}${compact}\n  `);
         } else if (ev.type === "error") write(`\n[error] ${ev.message}`);
         else if (ev.type === "done") break;
@@ -243,8 +296,13 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
       write(`\n[error] ${(e as Error).message}`);
     }
     void emit({
-      sessionId, requestId, agent: "REPL", depth: 0, ts: now(),
-      type: "request.completed", data: { durationMs: now() - startedTs },
+      sessionId,
+      requestId,
+      agent: "REPL",
+      depth: 0,
+      ts: now(),
+      type: "request.completed",
+      data: { durationMs: now() - startedTs },
     });
   };
 
@@ -252,42 +310,74 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
 
   for await (const chunk of input) {
     const cls = classifyLine(chunk, {
-      focusedRoomId, focusedMembers, knownAgents,
-      lastAddressedBy: focusedRoomId ? (pending.get(focusedRoomId)?.addressedBy ?? null) : null,
+      focusedRoomId,
+      focusedMembers,
+      knownAgents,
+      lastAddressedBy: focusedRoomId
+        ? (pending.get(focusedRoomId)?.addressedBy ?? null)
+        : null,
     });
 
-    if (cls.kind === "empty") { write(PROMPT); continue; }
+    if (cls.kind === "empty") {
+      write(PROMPT);
+      continue;
+    }
     if (cls.kind === "quit") break;
-    if (cls.kind === "hint") { write(cls.message + "\n"); write(PROMPT); continue; }
+    if (cls.kind === "hint") {
+      write(cls.message + "\n");
+      write(PROMPT);
+      continue;
+    }
 
-    if (cls.kind === "direct") { await directSend(cls.agent, cls.prompt); write(PROMPT); continue; }
+    if (cls.kind === "direct") {
+      await directSend(cls.agent, cls.prompt);
+      write(PROMPT);
+      continue;
+    }
 
     // ---- Room commands (all require a broker) ----
-    if (!rooms) { write("rooms are disabled (no broker)\n"); write(PROMPT); continue; }
+    if (!rooms) {
+      write("rooms are disabled (no broker)\n");
+      write(PROMPT);
+      continue;
+    }
 
     if (cls.kind === "rooms") {
       const list = await rooms.listByMember(humanName);
       if (!list.length) write("(no rooms)\n");
       for (const r of list) {
-        write(`  ${r.roomId}  "${r.title}"  [${r.status}]${r.roomId === focusedRoomId ? " *focused" : ""}\n`);
+        write(
+          `  ${r.roomId}  "${r.title}"  [${r.status}]${
+            r.roomId === focusedRoomId ? " *focused" : ""
+          }\n`,
+        );
       }
-      write(PROMPT); continue;
+      write(PROMPT);
+      continue;
     }
 
     if (cls.kind === "roomNew") {
       const ib = ensureInbox();
       try {
         const res = await rooms.createRoom({
-          title: cls.title, members: cls.members, createdBy: humanName, sessionId,
+          title: cls.title,
+          members: cls.members,
+          createdBy: humanName,
+          sessionId,
           humanMembers: [{ name: humanName, inboxUrl: ib.url }],
         });
         focusedRoomId = res.roomId;
         await refreshFocused(res.roomId);
         write(`joined room ${res.roomId} "${cls.title}"`);
-        if (res.unresolved.length) write(`  (unresolved: ${res.unresolved.join(", ")})`);
+        if (res.unresolved.length) {
+          write(`  (unresolved: ${res.unresolved.join(", ")})`);
+        }
         write("\n");
-      } catch (e) { write(`[error] ${(e as Error).message}\n`); }
-      write(PROMPT); continue;
+      } catch (e) {
+        write(`[error] ${(e as Error).message}\n`);
+      }
+      write(PROMPT);
+      continue;
     }
 
     if (cls.kind === "roomJoin") {
@@ -297,45 +387,90 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
         focusedRoomId = cls.roomId;
         await refreshFocused(cls.roomId);
         write(`joined room ${cls.roomId} "${focusedTitle}"\n`);
-      } catch (e) { write(`[error] ${(e as Error).message}\n`); }
-      write(PROMPT); continue;
+      } catch (e) {
+        write(`[error] ${(e as Error).message}\n`);
+      }
+      write(PROMPT);
+      continue;
     }
 
     if (cls.kind === "roomLeave") {
-      if (!focusedRoomId) { write("not in a room\n"); write(PROMPT); continue; }
-      try { await rooms.leave(focusedRoomId, humanName); } catch { /* ignore */ }
+      if (!focusedRoomId) {
+        write("not in a room\n");
+        write(PROMPT);
+        continue;
+      }
+      try {
+        await rooms.leave(focusedRoomId, humanName);
+      } catch { /* ignore */ }
       write(`left room ${focusedRoomId}\n`);
       pending.delete(focusedRoomId);
-      focusedRoomId = null; focusedMembers = new Set(); focusedTitle = "";
-      write(PROMPT); continue;
+      focusedRoomId = null;
+      focusedMembers = new Set();
+      focusedTitle = "";
+      write(PROMPT);
+      continue;
     }
 
     if (cls.kind === "roomLog") {
-      if (!focusedRoomId) { write("not in a room\n"); write(PROMPT); continue; }
+      if (!focusedRoomId) {
+        write("not in a room\n");
+        write(PROMPT);
+        continue;
+      }
       const got = await rooms.get(focusedRoomId);
       if (!got || !got.transcript.length) write("(no history)\n");
-      else for (const m of got.transcript) {
-        write(`  [${m.from}${m.to.length ? " → " + m.to.join(", ") : ""}] ${m.text}\n`);
-      }
-      write(PROMPT); continue;
+      else {for (const m of got.transcript) {
+          write(
+            `  [${m.from}${
+              m.to.length ? " → " + m.to.join(", ") : ""
+            }] ${m.text}\n`,
+          );
+        }}
+      write(PROMPT);
+      continue;
     }
 
     if (cls.kind === "roomPost") {
-      if (!focusedRoomId) { write("not in a room\n"); write(PROMPT); continue; }
-      if (!cls.text) { write("(nothing to post)\n"); write(PROMPT); continue; }
+      if (!focusedRoomId) {
+        write("not in a room\n");
+        write(PROMPT);
+        continue;
+      }
+      if (!cls.text) {
+        write("(nothing to post)\n");
+        write(PROMPT);
+        continue;
+      }
       const p = pending.get(focusedRoomId);
       try {
         await rooms.post(focusedRoomId, {
-          from: humanName, text: cls.text, to: cls.to, turnId: p?.turnId,
+          from: humanName,
+          text: cls.text,
+          to: cls.to,
+          turnId: p?.turnId,
         });
         // Only clear if no newer delivery arrived during the await.
-        if (pending.get(focusedRoomId)?.turnId === p?.turnId) pending.delete(focusedRoomId);
-      } catch (e) { write(`[error] ${(e as Error).message}\n`); }
-      write(PROMPT); continue;
+        if (pending.get(focusedRoomId)?.turnId === p?.turnId) {
+          pending.delete(focusedRoomId);
+        }
+      } catch (e) {
+        write(`[error] ${(e as Error).message}\n`);
+      }
+      write(PROMPT);
+      continue;
     }
   }
 
   // ---- Cleanup: leave the focused room and stop the inbox server ----
-  if (focusedRoomId && rooms) { try { await rooms.leave(focusedRoomId, humanName); } catch { /* ignore */ } }
-  if (inbox !== null) { const ib = inbox as ReplInboxHandle; await ib.drain(); await ib.shutdown(); }
+  if (focusedRoomId && rooms) {
+    try {
+      await rooms.leave(focusedRoomId, humanName);
+    } catch { /* ignore */ }
+  }
+  if (inbox !== null) {
+    const ib = inbox as ReplInboxHandle;
+    await ib.drain();
+    await ib.shutdown();
+  }
 }

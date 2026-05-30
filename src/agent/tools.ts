@@ -157,8 +157,15 @@ const ROOM_TOOLS: BaseTool[] = [
       type: "object",
       properties: {
         title: { type: "string", description: "Short room title" },
-        members: { type: "array", items: { type: "string" }, description: "Agent names to add (besides you)" },
-        maxTurns: { type: "number", description: "Optional hard cap on total posts (default 24)" },
+        members: {
+          type: "array",
+          items: { type: "string" },
+          description: "Agent names to add (besides you)",
+        },
+        maxTurns: {
+          type: "number",
+          description: "Optional hard cap on total posts (default 24)",
+        },
       },
       required: ["title", "members"],
     },
@@ -166,13 +173,17 @@ const ROOM_TOOLS: BaseTool[] = [
   {
     name: "post",
     description:
-      "Post a message to a room, addressing specific members. `to` lists the member names that should respond; use [] to address no one (lets the conversation wind down) or [\"*\"] for everyone. Only addressed members are woken to reply.",
+      'Post a message to a room, addressing specific members. `to` lists the member names that should respond; use [] to address no one (lets the conversation wind down) or ["*"] for everyone. Only addressed members are woken to reply.',
     parameters: {
       type: "object",
       properties: {
         roomId: { type: "string" },
         text: { type: "string", description: "What to say" },
-        to: { type: "array", items: { type: "string" }, description: "Member names to address" },
+        to: {
+          type: "array",
+          items: { type: "string" },
+          description: "Member names to address",
+        },
       },
       required: ["roomId", "text", "to"],
     },
@@ -189,17 +200,26 @@ const ROOM_TOOLS: BaseTool[] = [
   {
     name: "leave",
     description: "Leave a room when you're done participating.",
-    parameters: { type: "object", properties: { roomId: { type: "string" } }, required: ["roomId"] },
+    parameters: {
+      type: "object",
+      properties: { roomId: { type: "string" } },
+      required: ["roomId"],
+    },
   },
   {
     name: "list_rooms",
-    description: "List rooms you are a member of. Returns roomId, title, and members for each.",
+    description:
+      "List rooms you are a member of. Returns roomId, title, and members for each.",
     parameters: { type: "object", properties: {}, required: [] },
   },
   {
     name: "room_history",
     description: "Fetch the full transcript of a room you belong to.",
-    parameters: { type: "object", properties: { roomId: { type: "string" } }, required: ["roomId"] },
+    parameters: {
+      type: "object",
+      properties: { roomId: { type: "string" } },
+      required: ["roomId"],
+    },
   },
 ];
 
@@ -262,7 +282,9 @@ Room tools:
 When you are addressed in a room, just reply naturally — your reply is sent to whoever addressed you. Call post() explicitly only when you want to address someone specific, address everyone, or end the exchange.`;
 
 export function getTools(deps: ToolDeps): BaseTool[] {
-  const tools = deps.spawnAgent ? [...BASE_TOOLS, ...SPAWN_TOOLS] : [...BASE_TOOLS];
+  const tools = deps.spawnAgent
+    ? [...BASE_TOOLS, ...SPAWN_TOOLS]
+    : [...BASE_TOOLS];
   if (deps.rooms) tools.push(...ROOM_TOOLS);
   if (deps.search) tools.push(WEB_SEARCH_TOOL);
   return tools;
@@ -288,7 +310,9 @@ export function toOllamaTools(deps: ToolDeps) {
 }
 
 export function buildSystemSuffix(deps: ToolDeps): string {
-  let s = deps.spawnAgent ? DELEGATION_SUFFIX + SPAWN_SUFFIX : DELEGATION_SUFFIX;
+  let s = deps.spawnAgent
+    ? DELEGATION_SUFFIX + SPAWN_SUFFIX
+    : DELEGATION_SUFFIX;
   if (deps.rooms) s += ROOMS_SUFFIX;
   return s;
 }
@@ -334,14 +358,37 @@ export async function runTool(
   parentContextId: string,
   ids: EmitIds = { sessionId: "", requestId: "" },
 ): Promise<string> {
-  const result = await dispatchTool(deps, name, args, depth, parentContextId, ids);
-  const skipEmit = ["delegate_start", "delegate_continue", "spawn_agent", "create_room", "post", "invite", "leave"];
+  const result = await dispatchTool(
+    deps,
+    name,
+    args,
+    depth,
+    parentContextId,
+    ids,
+  );
+  const skipEmit = [
+    "delegate_start",
+    "delegate_continue",
+    "spawn_agent",
+    "create_room",
+    "post",
+    "invite",
+    "leave",
+  ];
   if (!skipEmit.includes(name)) {
     const emit = deps.emit ?? (() => Promise.resolve());
     void emit({
-      sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
-      depth, ts: now(), type: "tool.call",
-      data: { tool: name, args: truncate(JSON.stringify(args), 120), result: truncate(result, 4000) },
+      sessionId: ids.sessionId,
+      requestId: ids.requestId,
+      agent: deps.selfName,
+      depth,
+      ts: now(),
+      type: "tool.call",
+      data: {
+        tool: name,
+        args: truncate(JSON.stringify(args), 120),
+        result: truncate(result, 4000),
+      },
     });
   }
   return result;
@@ -356,10 +403,20 @@ async function dispatchTool(
   ids: EmitIds = { sessionId: "", requestId: "" },
 ): Promise<string> {
   const emit = deps.emit ?? (() => Promise.resolve());
-  const ev = (type: Parameters<Emitter>[0]["type"], data: Record<string, unknown>, threadId?: string) =>
+  const ev = (
+    type: Parameters<Emitter>[0]["type"],
+    data: Record<string, unknown>,
+    threadId?: string,
+  ) =>
     void emit({
-      sessionId: ids.sessionId, requestId: ids.requestId, agent: deps.selfName,
-      depth, ts: now(), type, data, threadId,
+      sessionId: ids.sessionId,
+      requestId: ids.requestId,
+      agent: deps.selfName,
+      depth,
+      ts: now(),
+      type,
+      data,
+      threadId,
     });
 
   try {
@@ -399,14 +456,30 @@ async function dispatchTool(
       const card = await deps.registry.get(target);
       if (!card) return JSON.stringify({ error: `unknown agent ${target}` });
       const meta = await deps.threads.start(parentContextId, target, title);
-      ev("delegate.start", { peer: target, title, prompt: truncate(prompt, 4000) }, meta.threadId);
+      ev("delegate.start", {
+        peer: target,
+        title,
+        prompt: truncate(prompt, 4000),
+      }, meta.threadId);
       const startedTs = now();
       // If delegate() throws, the outer catch returns an error JSON and
       // delegate.return is not emitted — the monitor must treat a dangling
       // delegate.start as an implicitly-failed leg (v1 limitation).
-      const text = await delegate(deps, meta.threadId, card.url, prompt, depth, ids);
+      const text = await delegate(
+        deps,
+        meta.threadId,
+        card.url,
+        prompt,
+        depth,
+        ids,
+      );
       await deps.threads.touch(meta.threadId);
-      ev("delegate.return", { peer: target, ok: true, durationMs: now() - startedTs, preview: truncate(text, 4000) }, meta.threadId);
+      ev("delegate.return", {
+        peer: target,
+        ok: true,
+        durationMs: now() - startedTs,
+        preview: truncate(text, 4000),
+      }, meta.threadId);
       return JSON.stringify({ threadId: meta.threadId, text });
     }
 
@@ -422,12 +495,21 @@ async function dispatchTool(
       }
       const card = await deps.registry.get(meta.peer);
       if (!card) return JSON.stringify({ error: `peer ${meta.peer} is gone` });
-      ev("delegate.continue", { peer: meta.peer, turn: meta.turnCount + 1, prompt: truncate(prompt, 4000) }, threadId);
+      ev("delegate.continue", {
+        peer: meta.peer,
+        turn: meta.turnCount + 1,
+        prompt: truncate(prompt, 4000),
+      }, threadId);
       const startedTs = now();
       // See delegate_start: a throw here leaves a dangling delegate.start (v1).
       const text = await delegate(deps, threadId, card.url, prompt, depth, ids);
       await deps.threads.touch(threadId);
-      ev("delegate.return", { peer: meta.peer, ok: true, durationMs: now() - startedTs, preview: truncate(text, 4000) }, threadId);
+      ev("delegate.return", {
+        peer: meta.peer,
+        ok: true,
+        durationMs: now() - startedTs,
+        preview: truncate(text, 4000),
+      }, threadId);
       return JSON.stringify({ threadId, text });
     }
 
@@ -461,17 +543,26 @@ async function dispatchTool(
         ? args.model
         : undefined;
       const result = await deps.spawnAgent(role, customName, model);
-      ev("spawn", { role, name: result.name ?? customName ?? role, model: model ?? null, ok: result.ok });
+      ev("spawn", {
+        role,
+        name: result.name ?? customName ?? role,
+        model: model ?? null,
+        ok: result.ok,
+      });
       return JSON.stringify(result);
     }
 
     if (name === "web_search") {
-      if (!deps.search) return JSON.stringify({ error: "web search not configured" });
+      if (!deps.search) {
+        return JSON.stringify({ error: "web search not configured" });
+      }
       const query = String(args.query ?? "");
       const results = (await deps.search(query, 5)).map((r) => ({
         title: r.title,
         url: r.url,
-        content: r.content.length > 800 ? r.content.slice(0, 800) + "…" : r.content,
+        content: r.content.length > 800
+          ? r.content.slice(0, 800) + "…"
+          : r.content,
       }));
       return JSON.stringify({ results });
     }
@@ -501,7 +592,10 @@ async function dispatchTool(
         active.posted = true;
       }
       const res = await deps.rooms.post(roomId, {
-        from: deps.selfName, text: String(args.text ?? ""), to, turnId,
+        from: deps.selfName,
+        text: String(args.text ?? ""),
+        to,
+        turnId,
       });
       return JSON.stringify(res);
     }
@@ -522,7 +616,9 @@ async function dispatchTool(
       if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
       const rooms = await deps.rooms.listByMember(deps.selfName);
       return JSON.stringify(rooms.map((r) => ({
-        roomId: r.roomId, title: r.title, members: r.members.filter((m) => m.active).map((m) => m.name),
+        roomId: r.roomId,
+        title: r.title,
+        members: r.members.filter((m) => m.active).map((m) => m.name),
       })));
     }
 
@@ -530,7 +626,9 @@ async function dispatchTool(
       if (!deps.rooms) return JSON.stringify({ error: "rooms not available" });
       const res = await deps.rooms.get(String(args.roomId));
       if (!res) return JSON.stringify({ error: "unknown room" });
-      return JSON.stringify(res.transcript.map((m) => ({ from: m.from, to: m.to, text: m.text })));
+      return JSON.stringify(
+        res.transcript.map((m) => ({ from: m.from, to: m.to, text: m.text })),
+      );
     }
 
     return JSON.stringify({ error: `unknown tool ${name}` });

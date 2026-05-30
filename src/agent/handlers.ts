@@ -43,35 +43,60 @@ export async function buildHandlers(d: BuildHandlersDeps): Promise<Handlers> {
   const { preset, cfg } = d;
   if (preset.backend === "claude") {
     return makeClaudeHandlers({
-      model: d.model, systemPrompt: preset.systemPrompt, apiKey: cfg.anthropicApiKey,
-      store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
-      selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
-      emit: d.emit, webSearch: preset.webSearch,
-      rooms: d.rooms, roomTurn: d.roomTurn,
+      model: d.model,
+      systemPrompt: preset.systemPrompt,
+      apiKey: cfg.anthropicApiKey,
+      store: d.store,
+      threads: d.threads,
+      registry: d.registry,
+      bearerToken: cfg.bearerToken,
+      selfName: d.selfName,
+      spawnAgent: d.spawnAgent,
+      availableRoles: d.availableRoles,
+      emit: d.emit,
+      webSearch: preset.webSearch,
+      rooms: d.rooms,
+      roomTurn: d.roomTurn,
     });
   }
   if (preset.backend === "claude-code") {
     const { makeClaudeCodeHandlers } = await import("./claude-code.ts");
     // TODO(plan-3): expose room tools to the claude-code MCP surface
     return makeClaudeCodeHandlers({
-      model: d.model, systemPrompt: preset.systemPrompt,
-      oauthToken: cfg.claudeCodeOauthToken, apiKey: cfg.anthropicApiKey,
-      store: d.store, threads: d.threads, sessions: d.sessions, registry: d.registry,
-      bearerToken: cfg.bearerToken, selfName: d.selfName,
-      spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
+      model: d.model,
+      systemPrompt: preset.systemPrompt,
+      oauthToken: cfg.claudeCodeOauthToken,
+      apiKey: cfg.anthropicApiKey,
+      store: d.store,
+      threads: d.threads,
+      sessions: d.sessions,
+      registry: d.registry,
+      bearerToken: cfg.bearerToken,
+      selfName: d.selfName,
+      spawnAgent: d.spawnAgent,
+      availableRoles: d.availableRoles,
       emit: d.emit,
     });
   }
   return makeOllamaHandlers({
-    model: d.model, systemPrompt: preset.systemPrompt, baseUrl: cfg.ollamaBaseUrl, store: d.store,
+    model: d.model,
+    systemPrompt: preset.systemPrompt,
+    baseUrl: cfg.ollamaBaseUrl,
+    store: d.store,
     tools: preset.toolCapable
       ? {
-          store: d.store, threads: d.threads, registry: d.registry, bearerToken: cfg.bearerToken,
-          selfName: d.selfName, spawnAgent: d.spawnAgent, availableRoles: d.availableRoles,
-          emit: d.emit,
-          search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
-          rooms: d.rooms, roomTurn: d.roomTurn,
-        }
+        store: d.store,
+        threads: d.threads,
+        registry: d.registry,
+        bearerToken: cfg.bearerToken,
+        selfName: d.selfName,
+        spawnAgent: d.spawnAgent,
+        availableRoles: d.availableRoles,
+        emit: d.emit,
+        search: preset.webSearch ? selectSearchProvider(cfg) : undefined,
+        rooms: d.rooms,
+        roomTurn: d.roomTurn,
+      }
       : undefined,
   });
 }

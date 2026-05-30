@@ -49,7 +49,10 @@ await registryClient.register(worker.card);
 console.log(`[worker]  ${worker.card.url}`);
 
 const children = new Map<string, Deno.ChildProcess>();
-async function waitForRegistration(name: string, timeoutMs = 15_000): Promise<boolean> {
+async function waitForRegistration(
+  name: string,
+  timeoutMs = 15_000,
+): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (await registryClient.get(name)) return true;
@@ -58,11 +61,17 @@ async function waitForRegistration(name: string, timeoutMs = 15_000): Promise<bo
   return false;
 }
 
-const spawnAgent = async (role: string, customName?: string, modelOverride?: string): Promise<SpawnResult> => {
+const spawnAgent = async (
+  role: string,
+  customName?: string,
+  modelOverride?: string,
+): Promise<SpawnResult> => {
   const preset = roles[role];
   if (!preset) return { ok: false, error: `unknown role ${role}` };
   const name = customName ?? role;
-  if (children.has(name)) return { ok: false, error: `agent ${name} already running` };
+  if (children.has(name)) {
+    return { ok: false, error: `agent ${name} already running` };
+  }
   const args = [
     "run",
     "--env-file=.env",
@@ -84,7 +93,9 @@ const spawnAgent = async (role: string, customName?: string, modelOverride?: str
   children.set(name, child);
   const ok = await waitForRegistration(name);
   if (!ok) {
-    try { child.kill("SIGTERM"); } catch { /* ignore */ }
+    try {
+      child.kill("SIGTERM");
+    } catch { /* ignore */ }
     children.delete(name);
     return { ok: false, error: "did not register in time" };
   }
@@ -102,7 +113,12 @@ const coordinatorHandlers = makeClaudeHandlers({
   selfName: "coordinator",
   spawnAgent,
   availableRoles: () =>
-    Object.entries(roles).map(([name, r]) => ({ name, description: r.description, backend: r.backend, defaultModel: r.model })),
+    Object.entries(roles).map(([name, r]) => ({
+      name,
+      description: r.description,
+      backend: r.backend,
+      defaultModel: r.model,
+    })),
 });
 const coordinator = await startAgent({
   card: baseCard("coordinator", roles.coordinator),
@@ -171,7 +187,11 @@ const rejectRes = await fetch(`${worker.card.url}/message/send`, {
     "x-depth": "2",
   },
   body: JSON.stringify({
-    message: { messageId: "x", role: "user", parts: [{ type: "text", text: "hi" }] },
+    message: {
+      messageId: "x",
+      role: "user",
+      parts: [{ type: "text", text: "hi" }],
+    },
   }),
 });
 console.log(`< HTTP ${rejectRes.status} (expected 429)`);
@@ -180,7 +200,11 @@ await rejectRes.body?.cancel();
 console.log("\n--- ThreadStore state ---");
 const finalThreads = await threads.list(replContextId);
 for (const t of finalThreads) {
-  console.log(`  ${t.peer}/${t.threadId.slice(0, 8)}  turns=${t.turnCount}  title="${t.title}"`);
+  console.log(
+    `  ${t.peer}/${
+      t.threadId.slice(0, 8)
+    }  turns=${t.turnCount}  title="${t.title}"`,
+  );
 }
 
 // Kill spawned subprocesses
@@ -188,8 +212,12 @@ for (const [name, child] of children) {
   try {
     await registryClient.deregister(name);
   } catch { /* ignore */ }
-  try { child.kill("SIGTERM"); } catch { /* ignore */ }
-  try { await child.status; } catch { /* ignore */ }
+  try {
+    child.kill("SIGTERM");
+  } catch { /* ignore */ }
+  try {
+    await child.status;
+  } catch { /* ignore */ }
 }
 
 await worker.shutdown();

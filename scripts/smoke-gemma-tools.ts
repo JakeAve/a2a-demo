@@ -111,7 +111,11 @@ await ask(
 
 console.log("\n--- ThreadStore state ---");
 for (const t of await threads.list(replContextId)) {
-  console.log(`  ${t.peer}/${t.threadId.slice(0, 8)}  turns=${t.turnCount}  title="${t.title}"`);
+  console.log(
+    `  ${t.peer}/${
+      t.threadId.slice(0, 8)
+    }  turns=${t.turnCount}  title="${t.title}"`,
+  );
 }
 
 await helper.shutdown();

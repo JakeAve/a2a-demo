@@ -11,7 +11,9 @@ export class InboxQueue<T> {
   enqueue(item: T): void {
     this.#queue.push(item);
     if (!this.#running) {
-      this.#idle = new Promise((res) => { this.#resolveIdle = res; });
+      this.#idle = new Promise((res) => {
+        this.#resolveIdle = res;
+      });
       this.#running = true;
       void this.#loop();
     }
@@ -20,7 +22,9 @@ export class InboxQueue<T> {
   async #loop(): Promise<void> {
     while (this.#queue.length) {
       const item = this.#queue.shift()!;
-      try { await this.process(item); } catch { /* a wedged turn must not kill the loop */ }
+      try {
+        await this.process(item);
+      } catch { /* a wedged turn must not kill the loop */ }
     }
     this.#running = false;
     this.#resolveIdle?.();

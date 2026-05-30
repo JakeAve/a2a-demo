@@ -67,12 +67,15 @@ await registryClient.register(captain.card);
 
 console.log(`[registry] localhost:${registry.port}`);
 console.log(`[helper]   ${helper.card.url}  (gemma3:1b)`);
-console.log(`[captain]  ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`);
+console.log(
+  `[captain]  ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`,
+);
 console.log();
 
 const start = Date.now();
 const contextId = crypto.randomUUID();
-const prompt = "Ask helper to pick one number between 1 and 10. After getting the answer back, say 'helper chose N' and that's all.";
+const prompt =
+  "Ask helper to pick one number between 1 and 10. After getting the answer back, say 'helper chose N' and that's all.";
 console.log(`> ${prompt}\n`);
 console.log("(streaming events below)");
 
@@ -80,17 +83,19 @@ let deltaCount = 0;
 let toolCount = 0;
 let firstByteAt = 0;
 
-for await (const ev of streamMessage({
-  url: captain.card.url,
-  token: cfg.bearerToken,
-  depth: 0,
-  message: {
-    messageId: crypto.randomUUID(),
-    role: "user",
-    parts: [{ type: "text", text: prompt }],
-    contextId,
-  },
-})) {
+for await (
+  const ev of streamMessage({
+    url: captain.card.url,
+    token: cfg.bearerToken,
+    depth: 0,
+    message: {
+      messageId: crypto.randomUUID(),
+      role: "user",
+      parts: [{ type: "text", text: prompt }],
+      contextId,
+    },
+  })
+) {
   if (ev.type === "delta") {
     if (!firstByteAt) firstByteAt = Date.now() - start;
     deltaCount++;

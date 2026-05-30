@@ -34,8 +34,18 @@ export function resolveClaudeCodeEnv(
 
 // Minimal view of the SDK messages we consume; injectable for tests.
 type SdkMessage =
-  | { type: "assistant"; session_id: string; message: { content: Array<{ type: string; text?: string }> } }
-  | { type: "result"; subtype: string; session_id: string; result?: string; errors?: string[] }
+  | {
+    type: "assistant";
+    session_id: string;
+    message: { content: Array<{ type: string; text?: string }> };
+  }
+  | {
+    type: "result";
+    subtype: string;
+    session_id: string;
+    result?: string;
+    errors?: string[];
+  }
   | { type: string; session_id?: string; [k: string]: unknown };
 
 export type QueryFn = (
@@ -66,7 +76,9 @@ function userText(ctx: AgentHandlerCtx): string {
     .join("\n");
 }
 
-function assistantText(msg: { message: { content: Array<{ type: string; text?: string }> } }): string {
+function assistantText(
+  msg: { message: { content: Array<{ type: string; text?: string }> } },
+): string {
   return (msg.message?.content ?? [])
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
@@ -77,7 +89,10 @@ type Accumulator = { finalText: string; sessionId?: string };
 
 // Process one SDK message: update the accumulator and report an optional
 // text delta to stream and/or a terminal error message.
-function step(msg: SdkMessage, acc: Accumulator): { delta?: string; error?: string } {
+function step(
+  msg: SdkMessage,
+  acc: Accumulator,
+): { delta?: string; error?: string } {
   if (msg.type === "assistant") {
     const am = msg as Extract<SdkMessage, { type: "assistant" }>;
     acc.sessionId ??= am.session_id;
@@ -97,7 +112,11 @@ function step(msg: SdkMessage, acc: Accumulator): { delta?: string; error?: stri
       if (typeof r.result === "string") acc.finalText = r.result;
       return {};
     }
-    return { error: `claude-code query failed (${r.subtype}): ${(r.errors ?? []).join("; ")}` };
+    return {
+      error: `claude-code query failed (${r.subtype}): ${
+        (r.errors ?? []).join("; ")
+      }`,
+    };
   }
   return {};
 }
@@ -121,11 +140,25 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
     const prompt = userText(ctx);
     await deps.store.append(contextId, { role: "user", content: prompt });
     const resume = await deps.sessions.get(contextId);
-    const env = resolveClaudeCodeEnv(Deno.env.toObject(), deps.oauthToken, deps.apiKey);
+    const env = resolveClaudeCodeEnv(
+      Deno.env.toObject(),
+      deps.oauthToken,
+      deps.apiKey,
+    );
     const ids = { sessionId: ctx.sessionId, requestId: ctx.requestId };
-    const server = buildA2aMcpServer(toolDeps, ctx.depth, contextId, undefined, ids);
+    const server = buildA2aMcpServer(
+      toolDeps,
+      ctx.depth,
+      contextId,
+      undefined,
+      ids,
+    );
     const options: Record<string, unknown> = {
-      systemPrompt: { type: "preset", preset: "claude_code", append: deps.systemPrompt },
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+        append: deps.systemPrompt,
+      },
       model: deps.model,
       maxTurns: 8,
       permissionMode: "bypassPermissions",
@@ -139,9 +172,15 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
 
   // Persist the SDK session id and mirror the assistant turn to the audit store.
   // Only called on a successful run (a failed query records nothing).
-  async function finishSession(contextId: string, acc: Accumulator): Promise<void> {
+  async function finishSession(
+    contextId: string,
+    acc: Accumulator,
+  ): Promise<void> {
     if (acc.sessionId) await deps.sessions.set(contextId, acc.sessionId);
-    await deps.store.append(contextId, { role: "assistant", content: acc.finalText });
+    await deps.store.append(contextId, {
+      role: "assistant",
+      content: acc.finalText,
+    });
   }
 
   async function handler(ctx: AgentHandlerCtx): Promise<{ text: string }> {
@@ -155,7 +194,9 @@ export function makeClaudeCodeHandlers(deps: ClaudeCodeDeps) {
     return { text: acc.finalText };
   }
 
-  async function* streamHandler(ctx: AgentHandlerCtx): AsyncGenerator<StreamEvent> {
+  async function* streamHandler(
+    ctx: AgentHandlerCtx,
+  ): AsyncGenerator<StreamEvent> {
     const { contextId, prompt, options } = await prepare(ctx);
     const acc: Accumulator = { finalText: "" };
     for await (const msg of runQuery({ prompt, options })) {

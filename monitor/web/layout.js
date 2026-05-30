@@ -7,7 +7,12 @@ import { expandRoomTo } from "./room-helpers.js";
 export function computeLayout(events) {
   const order = [];
   const seen = new Set();
-  const see = (a) => { if (a && !seen.has(a)) { seen.add(a); order.push(a); } };
+  const see = (a) => {
+    if (a && !seen.has(a)) {
+      seen.add(a);
+      order.push(a);
+    }
+  };
 
   // roomMembers: roomId -> Set<memberName>. Seeded from room.created, updated on
   // room.invited — used to expand "to:["*"]" in room.post events.
@@ -20,10 +25,14 @@ export function computeLayout(events) {
     // Room participant lane discovery
     if (e.type === "room.post") {
       if (typeof e.data?.from === "string") see(e.data.from);
-      if (Array.isArray(e.data?.to)) e.data.to.forEach(n => { if (n !== "*") see(n); });
+      if (Array.isArray(e.data?.to)) {
+        e.data.to.forEach((n) => {
+          if (n !== "*") see(n);
+        });
+      }
     }
     if (e.type === "room.created" && Array.isArray(e.data?.members)) {
-      e.data.members.forEach(n => see(n));
+      e.data.members.forEach((n) => see(n));
       roomMembers.set(e.roomId ?? "", new Set(e.data.members));
     }
     if (e.type === "room.invited" && typeof e.data?.agent === "string") {
@@ -48,7 +57,12 @@ export function computeLayout(events) {
   for (const e of events) {
     const row = { y, seq: e.seq, event: e };
     if (e.type === "request.started") {
-      arrows.push({ ...row, kind: "request", from: "REPL", to: e.agent === "REPL" ? (e.data.target ?? "?") : e.agent });
+      arrows.push({
+        ...row,
+        kind: "request",
+        from: "REPL",
+        to: e.agent === "REPL" ? (e.data.target ?? "?") : e.agent,
+      });
     } else if (e.type === "delegate.start" || e.type === "delegate.continue") {
       arrows.push({ ...row, kind: "delegate", from: e.agent, to: e.data.peer });
     } else if (e.type === "delegate.return") {

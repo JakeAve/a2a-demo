@@ -4,8 +4,8 @@ import type { ContextStore, StoredMessage } from "../store/context.ts";
 import {
   buildSystemSuffix,
   runTool,
-  toOllamaTools,
   type ToolDeps,
+  toOllamaTools,
 } from "./tools.ts";
 
 export type OllamaDeps = {
@@ -67,11 +67,20 @@ async function dispatchTool(
   ctx: AgentHandlerCtx,
   contextId: string,
 ): Promise<string> {
-  if (!deps.tools) return JSON.stringify({ error: `unknown tool ${tc.function.name}` });
-  return runTool(deps.tools, tc.function.name, tc.function.arguments ?? {}, ctx.depth, contextId, {
-    sessionId: ctx.sessionId,
-    requestId: ctx.requestId,
-  });
+  if (!deps.tools) {
+    return JSON.stringify({ error: `unknown tool ${tc.function.name}` });
+  }
+  return runTool(
+    deps.tools,
+    tc.function.name,
+    tc.function.arguments ?? {},
+    ctx.depth,
+    contextId,
+    {
+      sessionId: ctx.sessionId,
+      requestId: ctx.requestId,
+    },
+  );
 }
 
 export function makeOllamaHandlers(deps: OllamaDeps) {
@@ -129,7 +138,10 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
       }
     }
 
-    await deps.store.append(contextId, { role: "assistant", content: finalText });
+    await deps.store.append(contextId, {
+      role: "assistant",
+      content: finalText,
+    });
     return { text: finalText };
   }
 
@@ -226,7 +238,10 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
       }
     }
 
-    await deps.store.append(contextId, { role: "assistant", content: finalText });
+    await deps.store.append(contextId, {
+      role: "assistant",
+      content: finalText,
+    });
     yield { type: "done" };
   }
 

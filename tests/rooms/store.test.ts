@@ -3,7 +3,12 @@ import { RoomStore } from "../../src/rooms/store.ts";
 
 function fixedClock(start = 1000) {
   let t = start;
-  return { now: () => t, advance: (ms: number) => { t += ms; } };
+  return {
+    now: () => t,
+    advance: (ms: number) => {
+      t += ms;
+    },
+  };
 }
 
 async function freshStore() {
@@ -15,7 +20,10 @@ async function freshStore() {
 Deno.test("createRoom stores members and is retrievable", async () => {
   const { store, kv } = await freshStore();
   const room = await store.createRoom({
-    title: "debate", createdBy: "Alvy", sessionId: "s1", maxTurns: 24,
+    title: "debate",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 24,
     members: [
       { name: "Alvy", inboxUrl: "http://a", kind: "agent" },
       { name: "Bex", inboxUrl: "http://b", kind: "agent" },
@@ -33,11 +41,22 @@ Deno.test("createRoom stores members and is retrievable", async () => {
 Deno.test("appendMessage assigns increasing seq and bumps turnCount", async () => {
   const { store, kv } = await freshStore();
   const room = await store.createRoom({
-    title: "t", createdBy: "Alvy", sessionId: "s1", maxTurns: 24,
+    title: "t",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 24,
     members: [{ name: "Alvy", inboxUrl: "http://a", kind: "agent" }],
   });
-  const m0 = await store.appendMessage(room.roomId, { from: "Alvy", to: ["Bex"], text: "one" });
-  const m1 = await store.appendMessage(room.roomId, { from: "Bex", to: ["Alvy"], text: "two" });
+  const m0 = await store.appendMessage(room.roomId, {
+    from: "Alvy",
+    to: ["Bex"],
+    text: "one",
+  });
+  const m1 = await store.appendMessage(room.roomId, {
+    from: "Bex",
+    to: ["Alvy"],
+    text: "two",
+  });
   assertEquals(m0.seq, 0);
   assertEquals(m1.seq, 1);
   const transcript = await store.getTranscript(room.roomId);
@@ -49,7 +68,10 @@ Deno.test("appendMessage assigns increasing seq and bumps turnCount", async () =
 Deno.test("listRoomsByMember returns rooms a member belongs to", async () => {
   const { store, kv } = await freshStore();
   const r = await store.createRoom({
-    title: "t", createdBy: "Alvy", sessionId: "s1", maxTurns: 24,
+    title: "t",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 24,
     members: [{ name: "Alvy", inboxUrl: "http://a", kind: "agent" }],
   });
   const rooms = await store.listRoomsByMember("Alvy");
@@ -60,7 +82,10 @@ Deno.test("listRoomsByMember returns rooms a member belongs to", async () => {
 Deno.test("delivery lifecycle drives the idle check", async () => {
   const { store, kv } = await freshStore();
   const r = await store.createRoom({
-    title: "t", createdBy: "Alvy", sessionId: "s1", maxTurns: 24,
+    title: "t",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 24,
     members: [
       { name: "Alvy", inboxUrl: "http://a", kind: "agent" },
       { name: "Bex", inboxUrl: "http://b", kind: "agent" },
@@ -77,13 +102,16 @@ Deno.test("delivery lifecycle drives the idle check", async () => {
 Deno.test("sweepExpired resolves only past-deadline pending deliveries", async () => {
   const { store, kv, clock } = await freshStore();
   const r = await store.createRoom({
-    title: "t", createdBy: "Alvy", sessionId: "s1", maxTurns: 24,
+    title: "t",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 24,
     members: [{ name: "Bex", inboxUrl: "http://b", kind: "agent" }],
   });
   const t1 = await store.createDelivery(r.roomId, "Bex", "Alvy", 100); // deadline now+100
   clock.advance(50);
-  assertEquals((await store.sweepExpired()).length, 0);   // not yet past
-  clock.advance(100);                                      // now past
+  assertEquals((await store.sweepExpired()).length, 0); // not yet past
+  clock.advance(100); // now past
   const swept = await store.sweepExpired();
   assertEquals(swept.map((d) => d.turnId), [t1.turnId]);
   assertEquals(await store.isIdle(r.roomId), true);
@@ -93,7 +121,10 @@ Deno.test("sweepExpired resolves only past-deadline pending deliveries", async (
 Deno.test("atTurnCap is true once turnCount reaches maxTurns", async () => {
   const { store, kv } = await freshStore();
   const r = await store.createRoom({
-    title: "t", createdBy: "Alvy", sessionId: "s1", maxTurns: 2,
+    title: "t",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 2,
     members: [{ name: "Alvy", inboxUrl: "http://a", kind: "agent" }],
   });
   assertEquals(await store.atTurnCap(r.roomId), false);
@@ -106,13 +137,20 @@ Deno.test("atTurnCap is true once turnCount reaches maxTurns", async () => {
 Deno.test("deactivateMember reports when fewer than 2 active remain", async () => {
   const { store, kv } = await freshStore();
   const r = await store.createRoom({
-    title: "t", createdBy: "Alvy", sessionId: "s1", maxTurns: 24,
+    title: "t",
+    createdBy: "Alvy",
+    sessionId: "s1",
+    maxTurns: 24,
     members: [
       { name: "Alvy", inboxUrl: "http://a", kind: "agent" },
       { name: "Bex", inboxUrl: "http://b", kind: "agent" },
     ],
   });
   assertEquals(await store.deactivateMember(r.roomId, "Alvy"), true); // 1 active left -> should close
-  assertEquals((await store.getRoom(r.roomId))?.members.find((m) => m.name === "Alvy")?.active, false);
+  assertEquals(
+    (await store.getRoom(r.roomId))?.members.find((m) => m.name === "Alvy")
+      ?.active,
+    false,
+  );
   kv.close();
 });

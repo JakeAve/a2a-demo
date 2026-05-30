@@ -16,14 +16,23 @@ function fakeStore(): ContextStore {
   const history: StoredMessage[] = [];
   return {
     get: () => Promise.resolve(history),
-    append: (_id: string, m: StoredMessage) => { history.push(m); return Promise.resolve(); },
+    append: (_id: string, m: StoredMessage) => {
+      history.push(m);
+      return Promise.resolve();
+    },
   } as unknown as ContextStore;
 }
 
 function ctx(): AgentHandlerCtx {
   return {
-    depth: 0, sessionId: "s", requestId: "r",
-    message: { messageId: "m", role: "user", parts: [{ type: "text", text: "hi" }] },
+    depth: 0,
+    sessionId: "s",
+    requestId: "r",
+    message: {
+      messageId: "m",
+      role: "user",
+      parts: [{ type: "text", text: "hi" }],
+    },
   } as AgentHandlerCtx;
 }
 
@@ -43,38 +52,51 @@ function fakeClient(responses: unknown[], budgets: number[]): Anthropic {
 
 function handlerWith(client: Anthropic) {
   return makeClaudeHandlers({
-    model: "m", systemPrompt: "sys", apiKey: "",
+    model: "m",
+    systemPrompt: "sys",
+    apiKey: "",
     store: fakeStore(),
     threads: {} as unknown as ThreadStore,
     registry: {} as unknown as RegistryClient,
-    bearerToken: "t", selfName: "researcher", client,
+    bearerToken: "t",
+    selfName: "researcher",
+    client,
   }).handler;
 }
 
 Deno.test("claude loop: a truncated turn is retried with a bigger budget, not dropped", async () => {
   const budgets: number[] = [];
   const client = fakeClient([
-    { stop_reason: "max_tokens", content: [{ type: "text", text: "partial (truncated)" }] },
-    { stop_reason: "end_turn", content: [{ type: "text", text: "the complete answer" }] },
+    {
+      stop_reason: "max_tokens",
+      content: [{ type: "text", text: "partial (truncated)" }],
+    },
+    {
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: "the complete answer" }],
+    },
   ], budgets);
 
   const res = await handlerWith(client)(ctx());
 
   // Old behavior returned "partial (truncated)" and never retried.
   assertEquals(res.text, "the complete answer");
-  assertEquals(budgets[0], 4096);     // generous base budget
-  assertEquals(budgets[1], 8192);     // doubled on truncation
+  assertEquals(budgets[0], 4096); // generous base budget
+  assertEquals(budgets[1], 8192); // doubled on truncation
 });
 
 Deno.test("claude loop: budget escalation is capped and terminates", async () => {
   const budgets: number[] = [];
   // Always truncated — must escalate 4096 -> 8192 -> 16384 then give up.
   const client = fakeClient([
-    { stop_reason: "max_tokens", content: [{ type: "text", text: "still truncated" }] },
+    {
+      stop_reason: "max_tokens",
+      content: [{ type: "text", text: "still truncated" }],
+    },
   ], budgets);
 
   const res = await handlerWith(client)(ctx());
 
   assertEquals(budgets, [4096, 8192, 16384]); // stops at the cap, no infinite loop
-  assertEquals(res.text, "still truncated");  // best-effort text returned
+  assertEquals(res.text, "still truncated"); // best-effort text returned
 });

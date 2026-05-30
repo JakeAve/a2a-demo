@@ -1,7 +1,12 @@
 // Persistence for the Room Broker. Owns its OWN Deno KV. Mutations for a
 // given room are serialised through a per-room promise chain so seq and
 // turnCount never race (the pattern monitor/store.ts uses per session).
-import type { Delivery, Member, RoomRecord, TranscriptMessage } from "./types.ts";
+import type {
+  Delivery,
+  Member,
+  RoomRecord,
+  TranscriptMessage,
+} from "./types.ts";
 
 export type CreateRoomInput = {
   title: string;
@@ -12,10 +17,13 @@ export type CreateRoomInput = {
 };
 
 export class RoomStore {
-  #seq = new Map<string, number>();             // roomId -> next transcript seq
-  #lock = new Map<string, Promise<unknown>>();  // per-room serialisation
+  #seq = new Map<string, number>(); // roomId -> next transcript seq
+  #lock = new Map<string, Promise<unknown>>(); // per-room serialisation
 
-  constructor(private kv: Deno.Kv, private now: () => number = () => Date.now()) {}
+  constructor(
+    private kv: Deno.Kv,
+    private now: () => number = () => Date.now(),
+  ) {}
 
   // Chain `fn` onto any in-flight mutation for this room.
   #withLock<T>(roomId: string, fn: () => Promise<T>): Promise<T> {
@@ -33,7 +41,11 @@ export class RoomStore {
       title: input.title,
       createdBy: input.createdBy,
       status: "open",
-      members: input.members.map((m) => ({ ...m, active: true, joinedAt: now })),
+      members: input.members.map((m) => ({
+        ...m,
+        active: true,
+        joinedAt: now,
+      })),
       turnCount: 0,
       maxTurns: input.maxTurns,
       lastActivityAt: now,
@@ -59,7 +71,11 @@ export class RoomStore {
     const cached = this.#seq.get(roomId);
     if (cached !== undefined) return cached;
     let max = -1;
-    for await (const e of this.kv.list<TranscriptMessage>({ prefix: ["room_msg", roomId] })) {
+    for await (
+      const e of this.kv.list<TranscriptMessage>({
+        prefix: ["room_msg", roomId],
+      })
+    ) {
       if (e.value.seq > max) max = e.value.seq;
     }
     const next = max + 1;
@@ -76,7 +92,12 @@ export class RoomStore {
       if (!room) throw new Error(`unknown room ${roomId}`);
       const seq = await this.#nextSeq(roomId);
       const message: TranscriptMessage = {
-        seq, roomId, from: msg.from, to: msg.to, text: msg.text, ts: this.now(),
+        seq,
+        roomId,
+        from: msg.from,
+        to: msg.to,
+        text: msg.text,
+        ts: this.now(),
       };
       await this.kv.set(["room_msg", roomId, seq], message);
       this.#seq.set(roomId, seq + 1);
@@ -88,20 +109,29 @@ export class RoomStore {
 
   async getTranscript(roomId: string): Promise<TranscriptMessage[]> {
     const out: TranscriptMessage[] = [];
-    for await (const e of this.kv.list<TranscriptMessage>({ prefix: ["room_msg", roomId] })) {
+    for await (
+      const e of this.kv.list<TranscriptMessage>({
+        prefix: ["room_msg", roomId],
+      })
+    ) {
       out.push(e.value);
     }
     out.sort((a, b) => a.seq - b.seq);
     return out;
   }
 
-  async addMember(roomId: string, m: Pick<Member, "name" | "inboxUrl" | "kind">): Promise<void> {
+  async addMember(
+    roomId: string,
+    m: Pick<Member, "name" | "inboxUrl" | "kind">,
+  ): Promise<void> {
     await this.#withLock(roomId, async () => {
       const room = await this.getRoom(roomId);
       if (!room) throw new Error(`unknown room ${roomId}`);
       const existing = room.members.find((x) => x.name === m.name);
-      if (existing) { existing.active = true; existing.inboxUrl = m.inboxUrl; }
-      else room.members.push({ ...m, active: true, joinedAt: this.now() });
+      if (existing) {
+        existing.active = true;
+        existing.inboxUrl = m.inboxUrl;
+      } else room.members.push({ ...m, active: true, joinedAt: this.now() });
       await this.#setRoom(room);
       await this.kv.set(["room_by_member", m.name, roomId], 1);
     });
@@ -118,12 +148,20 @@ export class RoomStore {
   }
 
   async createDelivery(
-    roomId: string, member: string, addressedBy: string, ttlMs: number,
+    roomId: string,
+    member: string,
+    addressedBy: string,
+    ttlMs: number,
   ): Promise<Delivery> {
     const now = this.now();
     const delivery: Delivery = {
-      turnId: crypto.randomUUID(), roomId, member, addressedBy,
-      createdAt: now, deadline: now + ttlMs, status: "pending",
+      turnId: crypto.randomUUID(),
+      roomId,
+      member,
+      addressedBy,
+      createdAt: now,
+      deadline: now + ttlMs,
+      status: "pending",
     };
     await this.kv.set(["room_delivery", roomId, delivery.turnId], delivery);
     return delivery;
@@ -140,7 +178,9 @@ export class RoomStore {
 
   async pendingDeliveries(roomId: string): Promise<Delivery[]> {
     const out: Delivery[] = [];
-    for await (const e of this.kv.list<Delivery>({ prefix: ["room_delivery", roomId] })) {
+    for await (
+      const e of this.kv.list<Delivery>({ prefix: ["room_delivery", roomId] })
+    ) {
       if (e.value.status === "pending") out.push(e.value);
     }
     return out;
@@ -159,7 +199,9 @@ export class RoomStore {
   async sweepExpired(): Promise<Delivery[]> {
     const now = this.now();
     const swept: Delivery[] = [];
-    for await (const e of this.kv.list<Delivery>({ prefix: ["room_delivery"] })) {
+    for await (
+      const e of this.kv.list<Delivery>({ prefix: ["room_delivery"] })
+    ) {
       const d = e.value;
       if (d.status === "pending" && d.deadline <= now) {
         d.status = "resolved";

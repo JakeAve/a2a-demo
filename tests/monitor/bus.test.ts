@@ -3,7 +3,16 @@ import { EventBus } from "../../monitor/bus.ts";
 import type { A2AEvent } from "../../src/observability/events.ts";
 
 function ev(sessionId: string): A2AEvent {
-  return { sessionId, requestId: "r1", seq: 0, ts: 1, agent: "a", depth: 0, type: "turn.started", data: {} };
+  return {
+    sessionId,
+    requestId: "r1",
+    seq: 0,
+    ts: 1,
+    agent: "a",
+    depth: 0,
+    type: "turn.started",
+    data: {},
+  };
 }
 
 Deno.test("subscribers receive events for their session only", () => {

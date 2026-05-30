@@ -10,7 +10,10 @@ export class EventBus {
 
   subscribe(sessionId: string, listener: Listener): () => void {
     let set = this.#subs.get(sessionId);
-    if (!set) { set = new Set(); this.#subs.set(sessionId, set); }
+    if (!set) {
+      set = new Set();
+      this.#subs.set(sessionId, set);
+    }
     set.add(listener);
     return () => {
       set!.delete(listener);

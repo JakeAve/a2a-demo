@@ -1,5 +1,10 @@
 import { assert, assertEquals } from "@std/assert";
-import { isAgentCard, isMessage, type AgentCard, type Message } from "../../src/protocol/types.ts";
+import {
+  type AgentCard,
+  isAgentCard,
+  isMessage,
+  type Message,
+} from "../../src/protocol/types.ts";
 
 Deno.test("isAgentCard accepts a valid card", () => {
   const card: AgentCard = {

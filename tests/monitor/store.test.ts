@@ -4,8 +4,14 @@ import type { EmitEvent } from "../../src/observability/events.ts";
 
 function ev(partial: Partial<EmitEvent>): EmitEvent {
   return {
-    sessionId: "s1", requestId: "r1", ts: 1, agent: "a", depth: 0,
-    type: "turn.started", data: {}, ...partial,
+    sessionId: "s1",
+    requestId: "r1",
+    ts: 1,
+    agent: "a",
+    depth: 0,
+    type: "turn.started",
+    data: {},
+    ...partial,
   };
 }
 
@@ -27,9 +33,15 @@ Deno.test("ingest assigns monotonic seq per session and persists", async () => {
 Deno.test("session summary tracks agents, requests, lastSeq", async () => {
   const kv = await Deno.openKv(":memory:");
   const store = new MonitorStore(kv);
-  await store.ingest(ev({ agent: "REPL", type: "request.started", requestId: "r1" }));
-  await store.ingest(ev({ agent: "coordinator", type: "turn.started", requestId: "r1" }));
-  await store.ingest(ev({ agent: "REPL", type: "request.started", requestId: "r2" }));
+  await store.ingest(
+    ev({ agent: "REPL", type: "request.started", requestId: "r1" }),
+  );
+  await store.ingest(
+    ev({ agent: "coordinator", type: "turn.started", requestId: "r1" }),
+  );
+  await store.ingest(
+    ev({ agent: "REPL", type: "request.started", requestId: "r2" }),
+  );
 
   const list = await store.listSessions();
   assertEquals(list.length, 1);

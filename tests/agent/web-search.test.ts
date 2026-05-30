@@ -17,13 +17,18 @@ Deno.test("ollamaSearchProvider posts the query and maps results", async () => {
   const server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     seen = { auth: req.headers.get("authorization"), body: await req.json() };
     return new Response(
-      JSON.stringify({ results: [{ title: "T", url: "https://e.com", content: "C" }] }),
+      JSON.stringify({
+        results: [{ title: "T", url: "https://e.com", content: "C" }],
+      }),
       { headers: { "content-type": "application/json" } },
     );
   });
   const port = (server.addr as Deno.NetAddr).port;
 
-  const provider = ollamaSearchProvider("secret", `http://localhost:${port}/api/web_search`);
+  const provider = ollamaSearchProvider(
+    "secret",
+    `http://localhost:${port}/api/web_search`,
+  );
   const results = await provider("what is UDP", 3);
 
   await server.shutdown();
@@ -41,7 +46,8 @@ Deno.test("runTool(web_search) emits a tool.call and returns provider results", 
       events.push(e);
       return Promise.resolve();
     },
-    search: () => Promise.resolve([{ title: "T", url: "https://e.com", content: "c" }]),
+    search: () =>
+      Promise.resolve([{ title: "T", url: "https://e.com", content: "c" }]),
   } as unknown as ToolDeps;
 
   const out = await runTool(deps, "web_search", { query: "udp" }, 1, "ctx", {
@@ -57,7 +63,12 @@ Deno.test("runTool(web_search) emits a tool.call and returns provider results", 
 
 Deno.test("buildOllamaTools includes web_search iff the ToolDeps has a provider", () => {
   const fakeProvider = () => Promise.resolve([]);
-  const base = { model: "m", systemPrompt: "", baseUrl: "", store: null } as unknown as OllamaDeps;
+  const base = {
+    model: "m",
+    systemPrompt: "",
+    baseUrl: "",
+    store: null,
+  } as unknown as OllamaDeps;
   const hasWebSearch = (deps: OllamaDeps) =>
     buildOllamaTools(deps).some((t) => t.function.name === "web_search");
 
@@ -69,6 +80,9 @@ Deno.test("buildOllamaTools includes web_search iff the ToolDeps has a provider"
   assertEquals(hasWebSearch({ ...base, tools: toolsNoSearch }), false);
 
   // tool runner with a provider → web_search offered
-  const toolsWithSearch = { selfName: "a", search: fakeProvider } as unknown as ToolDeps;
+  const toolsWithSearch = {
+    selfName: "a",
+    search: fakeProvider,
+  } as unknown as ToolDeps;
   assertEquals(hasWebSearch({ ...base, tools: toolsWithSearch }), true);
 });

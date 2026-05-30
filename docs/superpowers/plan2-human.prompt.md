@@ -1,10 +1,10 @@
 # Kickoff prompt — Plan 2 of 3: Human participation in rooms
 
-**Branch:** `agent-rooms-human` (stacked on `agent-rooms` = Plan 1). Check out that
-branch, then paste the prompt below into a fresh Claude Code session.
+**Branch:** `agent-rooms-human` (stacked on `agent-rooms` = Plan 1). Check out
+that branch, then paste the prompt below into a fresh Claude Code session.
 
-> Tip: stop any leftover Plan-1 demo processes first (`pkill -f src/main.ts`); the
-> monitor on :7891 can stay running.
+> Tip: stop any leftover Plan-1 demo processes first (`pkill -f src/main.ts`);
+> the monitor on :7891 can stay running.
 
 ---
 

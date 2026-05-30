@@ -1,8 +1,8 @@
 import { type AgentSpec, type AppConfig } from "./config.ts";
 import type { RolePreset } from "./roles.ts";
-import { startRegistry, type RegistryHandle } from "./registry/server.ts";
+import { type RegistryHandle, startRegistry } from "./registry/server.ts";
 import { RegistryClient } from "./registry/client.ts";
-import { startAgent, type AgentHandle } from "./agent/base.ts";
+import { type AgentHandle, startAgent } from "./agent/base.ts";
 import { type SpawnResult } from "./agent/claude.ts";
 import { ContextStore } from "./store/context.ts";
 import { ThreadStore } from "./store/threads.ts";
@@ -12,7 +12,7 @@ import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 import { createEmitter } from "./observability/emit.ts";
 import type { Emitter } from "./observability/emit.ts";
-import { startRoomBroker, type RoomBrokerHandle } from "./rooms/server.ts";
+import { type RoomBrokerHandle, startRoomBroker } from "./rooms/server.ts";
 import { RoomBrokerClient } from "./rooms/client.ts";
 import type { RoomTurnState } from "./rooms/types.ts";
 import { makeRoomTurnProcessor } from "./agent/room-turn.ts";
@@ -36,8 +36,14 @@ export type OrchestratorContext = {
   store: ContextStore;
   threads: ThreadStore;
   agents: Map<string, AgentCard>;
-  spawnAgent: (role: string, name?: string, model?: string) => Promise<SpawnResult>;
-  availableRoles: () => Array<{ name: string; description: string; backend: string; defaultModel: string }>;
+  spawnAgent: (
+    role: string,
+    name?: string,
+    model?: string,
+  ) => Promise<SpawnResult>;
+  availableRoles: () => Array<
+    { name: string; description: string; backend: string; defaultModel: string }
+  >;
   emit: Emitter;
   bearerToken: string;
   registryPort: number;
@@ -59,14 +65,18 @@ export async function setupOrchestrator(
 ): Promise<OrchestratorContext> {
   const childStdout = opts.childStdout ?? "inherit";
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
-  const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
+  const registryClient = new RegistryClient(
+    `http://localhost:${registry.port}`,
+  );
   const kv = await Deno.openKv();
   const emit = createEmitter(cfg.monitorUrl || undefined, cfg.bearerToken);
   // Max delegation depth: a fixed A2A_MAX_DEPTH if set, else pegged to the
   // current registered-agent count (floored at 2 so it never tightens below
   // the original REPL→A→B budget). More agents → deeper fan-out allowed.
   const resolveMaxDepth = async () =>
-    cfg.maxDepth > 0 ? cfg.maxDepth : Math.max(2, (await registryClient.list()).length);
+    cfg.maxDepth > 0
+      ? cfg.maxDepth
+      : Math.max(2, (await registryClient.list()).length);
   const store = new ContextStore(kv);
   const threads = new ThreadStore(kv);
   const sessions = new SessionStore(kv);
@@ -110,7 +120,12 @@ export async function setupOrchestrator(
     if (agents.has(name) || children.has(name)) {
       return { ok: false, error: `agent "${name}" already running` };
     }
-    const perms = ["--allow-net", "--allow-env", "--allow-read", "--unstable-kv"];
+    const perms = [
+      "--allow-net",
+      "--allow-env",
+      "--allow-read",
+      "--unstable-kv",
+    ];
     if (preset.backend === "claude-code") {
       perms.push("--allow-run", "--allow-write", "--allow-sys");
     }
@@ -134,9 +149,14 @@ export async function setupOrchestrator(
       children.set(name, child);
       const ok = await waitForRegistration(registryClient, name);
       if (!ok) {
-        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        try {
+          child.kill("SIGTERM");
+        } catch { /* ignore */ }
         children.delete(name);
-        return { ok: false, error: `agent "${name}" failed to register within timeout` };
+        return {
+          ok: false,
+          error: `agent "${name}" failed to register within timeout`,
+        };
       }
       const card = await registryClient.get(name);
       if (card) agents.set(name, card);
@@ -210,15 +230,27 @@ export async function setupOrchestrator(
     shuttingDown = true;
     console.log("\nshutting down...");
     for (const [name, child] of children) {
-      try { await registryClient.deregister(name); } catch { /* ignore */ }
-      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+      try {
+        await registryClient.deregister(name);
+      } catch { /* ignore */ }
+      try {
+        child.kill("SIGTERM");
+      } catch { /* ignore */ }
     }
     for (const h of handles) {
-      try { await registryClient.deregister(h.card.name); } catch { /* ignore */ }
-      try { await h.shutdown(); } catch { /* ignore */ }
+      try {
+        await registryClient.deregister(h.card.name);
+      } catch { /* ignore */ }
+      try {
+        await h.shutdown();
+      } catch { /* ignore */ }
     }
-    try { await registry.shutdown(); } catch { /* ignore */ }
-    try { await roomBroker.shutdown(); } catch { /* ignore */ }
+    try {
+      await registry.shutdown();
+    } catch { /* ignore */ }
+    try {
+      await roomBroker.shutdown();
+    } catch { /* ignore */ }
     roomKv.close();
     kv.close();
   };

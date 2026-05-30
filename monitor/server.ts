@@ -7,8 +7,8 @@ import { parseEvent } from "../src/observability/events.ts";
 export type MonitorConfig = {
   kv: Deno.Kv;
   port: number;
-  token: string;       // "" disables the bearer check on /ingest
-  webDir?: string;     // static UI directory; omitted in tests
+  token: string; // "" disables the bearer check on /ingest
+  webDir?: string; // static UI directory; omitted in tests
 };
 
 export type MonitorHandle = {
@@ -26,7 +26,9 @@ export function startMonitor(cfg: MonitorConfig): Promise<MonitorHandle> {
   app.post("/ingest", async (c) => {
     if (cfg.token) {
       const auth = c.req.header("authorization") ?? "";
-      if (auth !== `Bearer ${cfg.token}`) return c.json({ error: "unauthorized" }, 401);
+      if (auth !== `Bearer ${cfg.token}`) {
+        return c.json({ error: "unauthorized" }, 401);
+      }
     }
     let body: unknown;
     try {
@@ -54,7 +56,9 @@ export function startMonitor(cfg: MonitorConfig): Promise<MonitorHandle> {
   // ── GET /api/sessions/:id ─────────────────────────────────────────────────
   app.get("/api/sessions/:id", async (c) => {
     const id = c.req.param("id");
-    const summary = (await store.listSessions()).find((s) => s.sessionId === id) ?? null;
+    const summary = (await store.listSessions()).find((s) =>
+      s.sessionId === id
+    ) ?? null;
     const events = await store.getSessionEvents(id);
     return c.json({ summary, events });
   });
@@ -88,7 +92,9 @@ export function startMonitor(cfg: MonitorConfig): Promise<MonitorHandle> {
         c.req.raw.signal?.addEventListener("abort", () => {
           unsub?.();
           unsub = null;
-          try { controller.close(); } catch { /* already closed */ }
+          try {
+            controller.close();
+          } catch { /* already closed */ }
         });
       },
       cancel() {
@@ -115,9 +121,12 @@ export function startMonitor(cfg: MonitorConfig): Promise<MonitorHandle> {
       const file = path === "/" ? "/index.html" : path;
       try {
         const body = await Deno.readFile(`${cfg.webDir}${file}`);
-        const type = file.endsWith(".html") ? "text/html"
-          : file.endsWith(".js") ? "text/javascript"
-          : file.endsWith(".css") ? "text/css"
+        const type = file.endsWith(".html")
+          ? "text/html"
+          : file.endsWith(".js")
+          ? "text/javascript"
+          : file.endsWith(".css")
+          ? "text/css"
           : "application/octet-stream";
         return new Response(body, { headers: { "content-type": type } });
       } catch {
@@ -133,6 +142,8 @@ export function startMonitor(cfg: MonitorConfig): Promise<MonitorHandle> {
   return Promise.resolve({
     port,
     url: `http://localhost:${port}`,
-    shutdown: async () => { await server.shutdown(); },
+    shutdown: async () => {
+      await server.shutdown();
+    },
   });
 }

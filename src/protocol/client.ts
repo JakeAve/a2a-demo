@@ -1,12 +1,12 @@
 import type { Message } from "./types.ts";
 
 export type SendOptions = {
-  url: string;             // target agent base URL
-  token: string;           // bearer
-  depth: number;           // current delegation depth (will be sent as x-depth)
+  url: string; // target agent base URL
+  token: string; // bearer
+  depth: number; // current delegation depth (will be sent as x-depth)
   message: Message;
-  sessionId?: string;      // forwarded as x-session
-  requestId?: string;      // forwarded as x-request
+  sessionId?: string; // forwarded as x-session
+  requestId?: string; // forwarded as x-request
 };
 
 export type SendResult = { text: string };
@@ -33,7 +33,9 @@ export async function sendMessage(opts: SendOptions): Promise<SendResult> {
     await res.body?.cancel();
     throw new Error("max delegation depth reached");
   }
-  if (!res.ok) throw new Error(`send failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`send failed: ${res.status} ${await res.text()}`);
+  }
   const json = await res.json();
   return { text: String(json.text ?? "") };
 }
@@ -44,7 +46,9 @@ export type StreamEvent =
   | { type: "error"; message: string }
   | { type: "done" };
 
-export async function* streamMessage(opts: SendOptions): AsyncGenerator<StreamEvent> {
+export async function* streamMessage(
+  opts: SendOptions,
+): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${opts.url}/message/stream`, {
     method: "POST",
     headers: {

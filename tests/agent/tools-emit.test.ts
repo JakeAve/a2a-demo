@@ -9,9 +9,13 @@ Deno.test("runTool(list_agents) emits a tool.call event with ids", async () => {
   // Registry stub returning an empty agent list.
   const server = Deno.serve({ port: 0, onListen: () => {} }, (req) => {
     if (new URL(req.url).pathname === "/agents") {
-      return new Response("[]", { headers: { "content-type": "application/json" } });
+      return new Response("[]", {
+        headers: { "content-type": "application/json" },
+      });
     }
-    return new Response("null", { headers: { "content-type": "application/json" } });
+    return new Response("null", {
+      headers: { "content-type": "application/json" },
+    });
   });
   const port = (server.addr as Deno.NetAddr).port;
 
@@ -21,10 +25,16 @@ Deno.test("runTool(list_agents) emits a tool.call event with ids", async () => {
     registry: new RegistryClient(`http://localhost:${port}`),
     bearerToken: "t",
     selfName: "coordinator",
-    emit: (e) => { events.push(e); return Promise.resolve(); },
+    emit: (e) => {
+      events.push(e);
+      return Promise.resolve();
+    },
   };
 
-  await runTool(deps, "list_agents", {}, 0, "ctx1", { sessionId: "s1", requestId: "r1" });
+  await runTool(deps, "list_agents", {}, 0, "ctx1", {
+    sessionId: "s1",
+    requestId: "r1",
+  });
   await server.shutdown();
 
   const call = events.find((e) => e.type === "tool.call")!;

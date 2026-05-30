@@ -7,8 +7,8 @@ import type { RegistryClient } from "../registry/client.ts";
 import {
   buildSystemSuffix,
   runTool,
-  toAnthropicTools,
   type SpawnResult,
+  toAnthropicTools,
   type ToolDeps,
 } from "./tools.ts";
 import type { Emitter } from "../observability/emit.ts";
@@ -43,13 +43,22 @@ export type ClaudeDeps = {
 // returns the results inline (as server_tool_use / web_search_tool_result
 // blocks we don't treat as client tool calls). Cast because the pinned SDK
 // (0.30) predates the server-tool types; the API accepts it at runtime.
-const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 5 };
+const WEB_SEARCH_TOOL = {
+  type: "web_search_20250305",
+  name: "web_search",
+  max_uses: 5,
+};
 
 // Build the Anthropic tools array: the A2A client tools, plus web_search when
 // enabled. Exported for testing.
-export function buildAnthropicTools(toolDeps: ToolDeps, webSearch?: boolean): Anthropic.Tool[] {
+export function buildAnthropicTools(
+  toolDeps: ToolDeps,
+  webSearch?: boolean,
+): Anthropic.Tool[] {
   const tools = toAnthropicTools(toolDeps) as unknown as Anthropic.Tool[];
-  return webSearch ? [...tools, WEB_SEARCH_TOOL as unknown as Anthropic.Tool] : tools;
+  return webSearch
+    ? [...tools, WEB_SEARCH_TOOL as unknown as Anthropic.Tool]
+    : tools;
 }
 
 function userText(ctx: AgentHandlerCtx): string {
@@ -112,7 +121,9 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
       const textBlocks = resp.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { text: string }).text);
-      const toolBlocks = resp.content.filter((b) => b.type === "tool_use") as Array<{
+      const toolBlocks = resp.content.filter((b) =>
+        b.type === "tool_use"
+      ) as Array<{
         type: "tool_use";
         id: string;
         name: string;
@@ -126,9 +137,16 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
           if ((b as { type?: string }).type === "server_tool_use") {
             const sb = b as { name?: string; input?: Record<string, unknown> };
             void deps.emit({
-              sessionId: ctx.sessionId, requestId: ctx.requestId, agent: deps.selfName,
-              depth: ctx.depth, ts: now(), type: "tool.call",
-              data: { tool: sb.name ?? "web_search", args: JSON.stringify(sb.input ?? {}).slice(0, 120) },
+              sessionId: ctx.sessionId,
+              requestId: ctx.requestId,
+              agent: deps.selfName,
+              depth: ctx.depth,
+              ts: now(),
+              type: "tool.call",
+              data: {
+                tool: sb.name ?? "web_search",
+                args: JSON.stringify(sb.input ?? {}).slice(0, 120),
+              },
             });
           }
         }
@@ -163,15 +181,26 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
         toolBlocks.map(async (tb) => ({
           type: "tool_result" as const,
           tool_use_id: tb.id,
-          content: await runTool(toolDeps, tb.name, tb.input, ctx.depth, contextId, {
-            sessionId: ctx.sessionId, requestId: ctx.requestId,
-          }),
+          content: await runTool(
+            toolDeps,
+            tb.name,
+            tb.input,
+            ctx.depth,
+            contextId,
+            {
+              sessionId: ctx.sessionId,
+              requestId: ctx.requestId,
+            },
+          ),
         })),
       );
       messages.push({ role: "user", content: toolResults as never });
     }
 
-    await deps.store.append(contextId, { role: "assistant", content: finalText });
+    await deps.store.append(contextId, {
+      role: "assistant",
+      content: finalText,
+    });
     return { text: finalText };
   }
 

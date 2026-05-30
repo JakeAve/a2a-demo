@@ -5,9 +5,9 @@ export type MemberKind = "agent" | "human";
 
 export type Member = {
   name: string;
-  inboxUrl: string;   // broker pushes deliveries to `${inboxUrl}/inbox`
+  inboxUrl: string; // broker pushes deliveries to `${inboxUrl}/inbox`
   kind: MemberKind;
-  active: boolean;    // false after leave()
+  active: boolean; // false after leave()
   joinedAt: number;
 };
 
@@ -17,10 +17,10 @@ export type RoomRecord = {
   createdBy: string;
   status: "open" | "closed";
   members: Member[];
-  turnCount: number;     // total posts; checked against maxTurns
+  turnCount: number; // total posts; checked against maxTurns
   maxTurns: number;
   lastActivityAt: number;
-  sessionId: string;     // monitor session that owns this room
+  sessionId: string; // monitor session that owns this room
 };
 
 export type TranscriptMessage = {
@@ -33,12 +33,12 @@ export type TranscriptMessage = {
 };
 
 export type Delivery = {
-  turnId: string;        // == delivery id
+  turnId: string; // == delivery id
   roomId: string;
-  member: string;        // recipient
-  addressedBy: string;   // poster who triggered it
+  member: string; // recipient
+  addressedBy: string; // poster who triggered it
   createdAt: number;
-  deadline: number;      // sweep resolves pending deliveries past this
+  deadline: number; // sweep resolves pending deliveries past this
   status: "pending" | "resolved";
 };
 
@@ -60,9 +60,9 @@ export type InboxDelivery = {
   turnId: string;
   addressedBy: string;
   title: string;
-  members: string[];          // active member names
+  members: string[]; // active member names
   transcript: TranscriptMessage[];
-  sessionId?: string;         // room's monitor session; enables agent turn events to flow
+  sessionId?: string; // room's monitor session; enables agent turn events to flow
 };
 
 // Body of POST /rooms/:id/post

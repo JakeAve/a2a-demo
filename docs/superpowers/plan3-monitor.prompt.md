@@ -1,20 +1,22 @@
 # Kickoff prompt — Plan 3 of 3: Monitor room view
 
-**Branch:** `agent-rooms-monitor` (stacked on `agent-rooms-human` = Plan 2, which is
-itself stacked on `agent-rooms` = Plan 1). **Plan 2 is now complete** on
-`agent-rooms-human` (kept, not merged — 134 tests passing). Make sure that branch
-has no uncommitted changes, then create the new branch off it
-(`git checkout agent-rooms-human && git checkout -b agent-rooms-monitor`) and paste
-the prompt below into a fresh Claude Code session.
+**Branch:** `agent-rooms-monitor` (stacked on `agent-rooms-human` = Plan 2,
+which is itself stacked on `agent-rooms` = Plan 1). **Plan 2 is now complete**
+on `agent-rooms-human` (kept, not merged — 134 tests passing). Make sure that
+branch has no uncommitted changes, then create the new branch off it
+(`git checkout agent-rooms-human && git checkout -b agent-rooms-monitor`) and
+paste the prompt below into a fresh Claude Code session.
 
-> Tip: stop any leftover Plan-1/2 demo processes first (`pkill -f src/main.ts;
-> pkill -f src/mcp.ts`); the monitor on :7891 must be (re)started from THIS branch
-> to accept `room.*` events.
+> Tip: stop any leftover Plan-1/2 demo processes first
+> (`pkill -f src/main.ts;
+> pkill -f src/mcp.ts`); the monitor on :7891 must be
+> (re)started from THIS branch to accept `room.*` events.
 
-> This is the plan that makes rooms actually *visible* in the monitor. Today the
-> broker emits all `room.*` events and they're stored, but `monitor/web/layout.js`
-> only draws arrows for delegate/tool/spawn/message.completed and silently skips
-> everything else — so room sessions render empty.
+> This is the plan that makes rooms actually _visible_ in the monitor. Today the
+> broker emits all `room.*` events and they're stored, but
+> `monitor/web/layout.js` only draws arrows for
+> delegate/tool/spawn/message.completed and silently skips everything else — so
+> room sessions render empty.
 
 ---
 

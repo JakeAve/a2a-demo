@@ -4,8 +4,17 @@
 // with depth 0 (delegations then go out at depth 1, exactly like the REPL).
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
-import { getTools, runTool, type BaseTool, type ToolDeps } from "./agent/tools.ts";
+import {
+  type CallToolRequest,
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import {
+  type BaseTool,
+  getTools,
+  runTool,
+  type ToolDeps,
+} from "./agent/tools.ts";
 import type { OrchestratorContext } from "./orchestrator.ts";
 
 export type McpTool = {
@@ -44,27 +53,42 @@ export async function callMcpTool(
   let isError = false;
   try {
     const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === "object" && "error" in parsed) isError = true;
+    if (parsed && typeof parsed === "object" && "error" in parsed) {
+      isError = true;
+    }
   } catch { /* non-JSON result is a success */ }
-  return { content: [{ type: "text", text }], ...(isError ? { isError: true } : {}) };
+  return {
+    content: [{ type: "text", text }],
+    ...(isError ? { isError: true } : {}),
+  };
 }
 
 /** Build (but do not connect) an MCP Server wired to these deps. Split out so tests can
  *  attach an in-memory transport instead of stdio. */
-export function buildMcpServer(deps: ToolDeps, contextId: string, sessionId: string): Server {
+export function buildMcpServer(
+  deps: ToolDeps,
+  contextId: string,
+  sessionId: string,
+): Server {
   const server = new Server(
     { name: "a2a", version: "1.0.0" },
     { capabilities: { tools: {} } },
   );
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: mcpToolList(deps) }));
-  server.setRequestHandler(CallToolRequestSchema, (req: CallToolRequest) =>
-    callMcpTool(
-      deps,
-      contextId,
-      sessionId,
-      req.params.name,
-      (req.params.arguments ?? {}) as Record<string, unknown>,
-    ));
+  server.setRequestHandler(
+    ListToolsRequestSchema,
+    () => ({ tools: mcpToolList(deps) }),
+  );
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    (req: CallToolRequest) =>
+      callMcpTool(
+        deps,
+        contextId,
+        sessionId,
+        req.params.name,
+        (req.params.arguments ?? {}) as Record<string, unknown>,
+      ),
+  );
   return server;
 }
 
@@ -91,7 +115,9 @@ export async function runMcpServer(ctx: OrchestratorContext): Promise<void> {
   const server = buildMcpServer(deps, contextId, contextId);
   // Assign onclose BEFORE connect so a fast client disconnect can't slip through
   // the gap and leave this promise unresolved.
-  const closed = new Promise<void>((resolve) => { server.onclose = () => resolve(); });
+  const closed = new Promise<void>((resolve) => {
+    server.onclose = () => resolve();
+  });
   const transport = new StdioServerTransport();
   // If connect() throws, propagate immediately rather than awaiting `closed`
   // (which would never resolve, hanging the server).

@@ -1,71 +1,105 @@
 # MCP Server Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose the A2A orchestrator as a self-contained MCP server over stdio so Claude Code (or any MCP client) can drive A2A agents via the existing raw delegation tools.
+**Goal:** Expose the A2A orchestrator as a self-contained MCP server over stdio
+so Claude Code (or any MCP client) can drive A2A agents via the existing raw
+delegation tools.
 
-**Architecture:** A new `src/mcp.ts` entry point boots the same scaffolding the REPL orchestrator uses (registry + configured agents + spawn closure), then runs an MCP stdio server *instead of* the REPL. The MCP server is a thin adapter: it re-exposes the already-transport-neutral tool list from `getTools(deps)` and routes every MCP `CallTool` to the existing `runTool(deps, ...)`. No new tool logic — the MCP client acts as a depth-0 driver, exactly the role the REPL plays today.
+**Architecture:** A new `src/mcp.ts` entry point boots the same scaffolding the
+REPL orchestrator uses (registry + configured agents + spawn closure), then runs
+an MCP stdio server _instead of_ the REPL. The MCP server is a thin adapter: it
+re-exposes the already-transport-neutral tool list from `getTools(deps)` and
+routes every MCP `CallTool` to the existing `runTool(deps, ...)`. No new tool
+logic — the MCP client acts as a depth-0 driver, exactly the role the REPL plays
+today.
 
-**Tech Stack:** Deno, `@modelcontextprotocol/sdk` (npm), the existing `src/agent/tools.ts` runner, Deno KV.
+**Tech Stack:** Deno, `@modelcontextprotocol/sdk` (npm), the existing
+`src/agent/tools.ts` runner, Deno KV.
 
 **Decisions locked (from scoping):**
-- **Tool surface:** mirror the raw A2A surface verbatim (`list_agents`, `list_my_threads`, `delegate_start`, `delegate_continue`, `reset_thread`, plus `spawn_agent`/`list_roles`). No `ask()` convenience wrapper.
-- **Process model:** self-contained — `src/mcp.ts` boots its own registry + agents. It is the sole orchestrator for that KV/registry while running.
-- **`web_search`:** not exposed over MCP (the MCP client has its own search). `ToolDeps.search` is left unset.
+
+- **Tool surface:** mirror the raw A2A surface verbatim (`list_agents`,
+  `list_my_threads`, `delegate_start`, `delegate_continue`, `reset_thread`, plus
+  `spawn_agent`/`list_roles`). No `ask()` convenience wrapper.
+- **Process model:** self-contained — `src/mcp.ts` boots its own registry +
+  agents. It is the sole orchestrator for that KV/registry while running.
+- **`web_search`:** not exposed over MCP (the MCP client has its own search).
+  `ToolDeps.search` is left unset.
 
 **Critical gotchas this plan must respect:**
-1. **stdout is the MCP wire.** On a stdio transport, the server reads/writes JSON-RPC on stdout. The orchestrator's `console.log` lines (registry/agent/shutdown) MUST be redirected to stderr in MCP mode, or they corrupt the protocol stream.
-2. **Child agents inherit stdout.** `spawnAgent` launches children with `stdout: "inherit"` ([src/orchestrator.ts:88-92](../../../src/orchestrator.ts)). In MCP mode their registration lines would also land on the MCP stdout. The setup must let MCP mode suppress child stdout (`stdout: "null"`; stderr stays inherited so real errors still surface).
+
+1. **stdout is the MCP wire.** On a stdio transport, the server reads/writes
+   JSON-RPC on stdout. The orchestrator's `console.log` lines
+   (registry/agent/shutdown) MUST be redirected to stderr in MCP mode, or they
+   corrupt the protocol stream.
+2. **Child agents inherit stdout.** `spawnAgent` launches children with
+   `stdout: "inherit"`
+   ([src/orchestrator.ts:88-92](../../../src/orchestrator.ts)). In MCP mode
+   their registration lines would also land on the MCP stdout. The setup must
+   let MCP mode suppress child stdout (`stdout: "null"`; stderr stays inherited
+   so real errors still surface).
 
 ---
 
 ## File Structure
 
-| File | Responsibility | Action |
-|---|---|---|
-| `deno.json` | Add MCP SDK import + `mcp` task | Modify |
-| `src/config.ts` | Host shared `getAgentsFlag` (DRY: used by both entries) | Modify |
-| `src/main.ts` | Use shared `getAgentsFlag` | Modify |
-| `src/orchestrator.ts` | Extract `setupOrchestrator()` returning a reusable `OrchestratorContext`; `runOrchestrator` becomes a thin REPL wrapper | Modify |
-| `src/mcp-server.ts` | MCP adapter: `mcpToolList`, `callMcpTool`, `buildMcpServer`, `runMcpServer` (the "driver", sibling to `repl.ts`) | Create |
-| `src/mcp.ts` | MCP entry point: redirect stdout-logging, boot scaffolding, run server, wire shutdown | Create |
-| `tests/mcp/mcp-server.test.ts` | Unit tests for the helpers + one in-memory SDK client↔server e2e | Create |
-| `scripts/smoke-mcp.ts` | Manual end-to-end via a real stdio client launching `deno task mcp` | Create |
-| `README.md` / `TODO.md` | Document the MCP entry; remove the done TODO entry | Modify |
+| File                           | Responsibility                                                                                                          | Action |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------ |
+| `deno.json`                    | Add MCP SDK import + `mcp` task                                                                                         | Modify |
+| `src/config.ts`                | Host shared `getAgentsFlag` (DRY: used by both entries)                                                                 | Modify |
+| `src/main.ts`                  | Use shared `getAgentsFlag`                                                                                              | Modify |
+| `src/orchestrator.ts`          | Extract `setupOrchestrator()` returning a reusable `OrchestratorContext`; `runOrchestrator` becomes a thin REPL wrapper | Modify |
+| `src/mcp-server.ts`            | MCP adapter: `mcpToolList`, `callMcpTool`, `buildMcpServer`, `runMcpServer` (the "driver", sibling to `repl.ts`)        | Create |
+| `src/mcp.ts`                   | MCP entry point: redirect stdout-logging, boot scaffolding, run server, wire shutdown                                   | Create |
+| `tests/mcp/mcp-server.test.ts` | Unit tests for the helpers + one in-memory SDK client↔server e2e                                                        | Create |
+| `scripts/smoke-mcp.ts`         | Manual end-to-end via a real stdio client launching `deno task mcp`                                                     | Create |
+| `README.md` / `TODO.md`        | Document the MCP entry; remove the done TODO entry                                                                      | Modify |
 
 ---
 
 ## Task 1: Add the MCP SDK dependency
 
 **Files:**
+
 - Modify: `deno.json:8-16` (imports) and `deno.json:2-7` (tasks)
 
 - [ ] **Step 1: Add the SDK import-map prefix and the `mcp` task**
 
-Edit `deno.json`. Add a `mcp` task under `tasks` (mirror `start`'s permissions — it spawns subprocesses, opens KV, and uses the network):
+Edit `deno.json`. Add a `mcp` task under `tasks` (mirror `start`'s permissions —
+it spawns subprocesses, opens KV, and uses the network):
 
 ```json
-  "tasks": {
-    "start": "deno run -A --unstable-kv --env-file=.env src/main.ts",
-    "start:agent": "deno run -A --unstable-kv --env-file=.env src/agent-entry.ts",
-    "mcp": "deno run -A --unstable-kv --env-file=.env src/mcp.ts",
-    "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv",
-    "monitor": "deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv --env-file=.env monitor/main.ts"
-  },
+"tasks": {
+  "start": "deno run -A --unstable-kv --env-file=.env src/main.ts",
+  "start:agent": "deno run -A --unstable-kv --env-file=.env src/agent-entry.ts",
+  "mcp": "deno run -A --unstable-kv --env-file=.env src/mcp.ts",
+  "test": "deno test --env-file=.env.example --allow-net --allow-env --allow-read --allow-write --allow-sys --unstable-kv",
+  "monitor": "deno run --allow-net --allow-env --allow-read --allow-write --unstable-kv --env-file=.env monitor/main.ts"
+},
 ```
 
-Add the SDK to `imports` (the trailing-slash prefix lets us import SDK subpaths the Deno way):
+Add the SDK to `imports` (the trailing-slash prefix lets us import SDK subpaths
+the Deno way):
 
 ```json
-    "zod": "npm:zod@^4.4.3",
-    "@modelcontextprotocol/sdk/": "npm:/@modelcontextprotocol/sdk@^1.18.0/"
+"zod": "npm:zod@^4.4.3",
+"@modelcontextprotocol/sdk/": "npm:/@modelcontextprotocol/sdk@^1.18.0/"
 ```
 
 - [ ] **Step 2: Verify the SDK resolves and the symbols we need exist**
 
-Run: `deno eval 'import { Server } from "@modelcontextprotocol/sdk/server/index.js"; import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"; import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"; import { Client } from "@modelcontextprotocol/sdk/client/index.js"; import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"; console.log(typeof Server, typeof StdioServerTransport, typeof CallToolRequestSchema, typeof Client, typeof InMemoryTransport);'`
+Run:
+`deno eval 'import { Server } from "@modelcontextprotocol/sdk/server/index.js"; import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"; import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"; import { Client } from "@modelcontextprotocol/sdk/client/index.js"; import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"; console.log(typeof Server, typeof StdioServerTransport, typeof CallToolRequestSchema, typeof Client, typeof InMemoryTransport);'`
 
-Expected: `function function object function function` (the request schemas are zod objects; classes are functions). If any subpath 404s, the installed major version differs — run `deno eval 'console.log((await import("@modelcontextprotocol/sdk/server/index.js")))'` to inspect, and adjust the version in `deno.json` to the latest `1.x`.
+Expected: `function function object function function` (the request schemas are
+zod objects; classes are functions). If any subpath 404s, the installed major
+version differs — run
+`deno eval 'console.log((await import("@modelcontextprotocol/sdk/server/index.js")))'`
+to inspect, and adjust the version in `deno.json` to the latest `1.x`.
 
 - [ ] **Step 3: Commit**
 
@@ -78,9 +112,11 @@ git commit -m "build: add @modelcontextprotocol/sdk dependency and mcp task"
 
 ## Task 2: Extract `getAgentsFlag` into config (DRY)
 
-`getAgentsFlag` currently lives only in `src/main.ts`. Both entry points need it; move it to `config.ts`.
+`getAgentsFlag` currently lives only in `src/main.ts`. Both entry points need
+it; move it to `config.ts`.
 
 **Files:**
+
 - Modify: `src/config.ts` (add export)
 - Modify: `src/main.ts:5-12` (remove local copy, import instead)
 
@@ -102,10 +138,16 @@ export function getAgentsFlag(args: string[]): string {
 
 - [ ] **Step 2: Update `src/main.ts` to import it**
 
-Replace the top of `src/main.ts` (lines 1-16) so the local `getAgentsFlag` is removed and the import is used:
+Replace the top of `src/main.ts` (lines 1-16) so the local `getAgentsFlag` is
+removed and the import is used:
 
 ```ts
-import { assertBackendCredentials, getAgentsFlag, loadConfig, parseAgentsFlag } from "./config.ts";
+import {
+  assertBackendCredentials,
+  getAgentsFlag,
+  loadConfig,
+  parseAgentsFlag,
+} from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { runOrchestrator } from "./orchestrator.ts";
 
@@ -114,12 +156,13 @@ const roles = await loadRoles();
 const specs = parseAgentsFlag(getAgentsFlag(Deno.args), roles);
 ```
 
-(Keep the existing `assertBackendCredentials` try/catch and `await runOrchestrator(...)` lines that follow.)
+(Keep the existing `assertBackendCredentials` try/catch and
+`await runOrchestrator(...)` lines that follow.)
 
 - [ ] **Step 3: Verify the existing suite still passes**
 
-Run: `deno task test`
-Expected: PASS (same count as before; this is a pure refactor).
+Run: `deno task test` Expected: PASS (same count as before; this is a pure
+refactor).
 
 - [ ] **Step 4: Commit**
 
@@ -132,9 +175,13 @@ git commit -m "refactor: move getAgentsFlag into config for reuse"
 
 ## Task 3: Extract `setupOrchestrator` from `runOrchestrator`
 
-Split the orchestrator into (a) `setupOrchestrator()` that boots everything and returns a reusable `OrchestratorContext`, and (b) `runOrchestrator()` that calls setup + the REPL. This lets the MCP entry reuse identical boot logic without the REPL. Also make child-process stdout configurable so MCP mode can suppress it.
+Split the orchestrator into (a) `setupOrchestrator()` that boots everything and
+returns a reusable `OrchestratorContext`, and (b) `runOrchestrator()` that calls
+setup + the REPL. This lets the MCP entry reuse identical boot logic without the
+REPL. Also make child-process stdout configurable so MCP mode can suppress it.
 
 **Files:**
+
 - Modify: `src/orchestrator.ts` (whole file)
 
 - [ ] **Step 1: Replace `src/orchestrator.ts` with the extracted version**
@@ -147,8 +194,14 @@ export type OrchestratorContext = {
   store: ContextStore;
   threads: ThreadStore;
   agents: Map<string, AgentCard>;
-  spawnAgent: (role: string, name?: string, model?: string) => Promise<SpawnResult>;
-  availableRoles: () => Array<{ name: string; description: string; backend: string; defaultModel: string }>;
+  spawnAgent: (
+    role: string,
+    name?: string,
+    model?: string,
+  ) => Promise<SpawnResult>;
+  availableRoles: () => Array<
+    { name: string; description: string; backend: string; defaultModel: string }
+  >;
   emit: ReturnType<typeof createEmitter>;
   bearerToken: string;
   registryPort: number;
@@ -169,11 +222,15 @@ export async function setupOrchestrator(
 ): Promise<OrchestratorContext> {
   const childStdout = opts.childStdout ?? "inherit";
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
-  const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
+  const registryClient = new RegistryClient(
+    `http://localhost:${registry.port}`,
+  );
   const kv = await Deno.openKv();
   const emit = createEmitter(cfg.monitorUrl || undefined, cfg.bearerToken);
   const resolveMaxDepth = async () =>
-    cfg.maxDepth > 0 ? cfg.maxDepth : Math.max(2, (await registryClient.list()).length);
+    cfg.maxDepth > 0
+      ? cfg.maxDepth
+      : Math.max(2, (await registryClient.list()).length);
   const store = new ContextStore(kv);
   const threads = new ThreadStore(kv);
   const sessions = new SessionStore(kv);
@@ -203,7 +260,12 @@ export async function setupOrchestrator(
     if (agents.has(name) || children.has(name)) {
       return { ok: false, error: `agent "${name}" already running` };
     }
-    const perms = ["--allow-net", "--allow-env", "--allow-read", "--unstable-kv"];
+    const perms = [
+      "--allow-net",
+      "--allow-env",
+      "--allow-read",
+      "--unstable-kv",
+    ];
     if (preset.backend === "claude-code") {
       perms.push("--allow-run", "--allow-write", "--allow-sys");
     }
@@ -226,9 +288,14 @@ export async function setupOrchestrator(
       children.set(name, child);
       const ok = await waitForRegistration(registryClient, name);
       if (!ok) {
-        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        try {
+          child.kill("SIGTERM");
+        } catch { /* ignore */ }
         children.delete(name);
-        return { ok: false, error: `agent "${name}" failed to register within timeout` };
+        return {
+          ok: false,
+          error: `agent "${name}" failed to register within timeout`,
+        };
       }
       const card = await registryClient.get(name);
       if (card) agents.set(name, card);
@@ -288,14 +355,24 @@ export async function setupOrchestrator(
     shuttingDown = true;
     console.log("\nshutting down...");
     for (const [name, child] of children) {
-      try { await registryClient.deregister(name); } catch { /* ignore */ }
-      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+      try {
+        await registryClient.deregister(name);
+      } catch { /* ignore */ }
+      try {
+        child.kill("SIGTERM");
+      } catch { /* ignore */ }
     }
     for (const h of handles) {
-      try { await registryClient.deregister(h.card.name); } catch { /* ignore */ }
-      try { await h.shutdown(); } catch { /* ignore */ }
+      try {
+        await registryClient.deregister(h.card.name);
+      } catch { /* ignore */ }
+      try {
+        await h.shutdown();
+      } catch { /* ignore */ }
     }
-    try { await registry.shutdown(); } catch { /* ignore */ }
+    try {
+      await registry.shutdown();
+    } catch { /* ignore */ }
     kv.close();
   };
 
@@ -319,24 +396,37 @@ export async function runOrchestrator(
   roles: Record<string, RolePreset>,
 ): Promise<void> {
   const ctx = await setupOrchestrator(cfg, specs, roles);
-  Deno.addSignalListener("SIGINT", () => { ctx.shutdown().then(() => Deno.exit(0)); });
-  await runRepl({ agents: ctx.agents, bearerToken: ctx.bearerToken, emit: ctx.emit });
+  Deno.addSignalListener("SIGINT", () => {
+    ctx.shutdown().then(() => Deno.exit(0));
+  });
+  await runRepl({
+    agents: ctx.agents,
+    bearerToken: ctx.bearerToken,
+    emit: ctx.emit,
+  });
   await ctx.shutdown();
   Deno.exit(0);
 }
 ```
 
-> Two behavior-preserving changes to note: `buildHandlers` is now `await`ed (it is `async` — the original `runOrchestrator` already called it without await, which worked only because the returned promise resolved before first use; awaiting is correct and matches `agent-entry.ts:77`). And `shutdown()` no longer calls `Deno.exit` itself — the caller does, so both entry points control their own exit.
+> Two behavior-preserving changes to note: `buildHandlers` is now `await`ed (it
+> is `async` — the original `runOrchestrator` already called it without await,
+> which worked only because the returned promise resolved before first use;
+> awaiting is correct and matches `agent-entry.ts:77`). And `shutdown()` no
+> longer calls `Deno.exit` itself — the caller does, so both entry points
+> control their own exit.
 
 - [ ] **Step 2: Verify nothing regressed**
 
-Run: `deno task test`
-Expected: PASS (no test drives `runOrchestrator` directly; e2e tests use `startAgent`).
+Run: `deno task test` Expected: PASS (no test drives `runOrchestrator` directly;
+e2e tests use `startAgent`).
 
 - [ ] **Step 3: Smoke the REPL path still boots**
 
-Run: `printf ':q\n' | deno task start --agents="scout" 2>&1 | head -5`
-Expected: prints `[registry] localhost:7890`, `[scout] http://...`, then exits cleanly on `:q`. (Requires Ollama for `scout`; if unavailable, substitute a role you can run, or skip — the unit suite already covers correctness.)
+Run: `printf ':q\n' | deno task start --agents="scout" 2>&1 | head -5` Expected:
+prints `[registry] localhost:7890`, `[scout] http://...`, then exits cleanly on
+`:q`. (Requires Ollama for `scout`; if unavailable, substitute a role you can
+run, or skip — the unit suite already covers correctness.)
 
 - [ ] **Step 4: Commit**
 
@@ -349,9 +439,13 @@ git commit -m "refactor: extract setupOrchestrator for reuse by non-REPL drivers
 
 ## Task 4: MCP adapter helpers (`src/mcp-server.ts`)
 
-The pure, testable core: convert the existing tool list to MCP's `inputSchema` shape, and route a tool call through `runTool`. The MCP client is a depth-0 driver, so we pass `depth = 0` (delegations then go out at depth 1, exactly like the REPL).
+The pure, testable core: convert the existing tool list to MCP's `inputSchema`
+shape, and route a tool call through `runTool`. The MCP client is a depth-0
+driver, so we pass `depth = 0` (delegations then go out at depth 1, exactly like
+the REPL).
 
 **Files:**
+
 - Create: `src/mcp-server.ts`
 - Test: `tests/mcp/mcp-server.test.ts`
 
@@ -367,15 +461,25 @@ import { RegistryClient } from "../../src/registry/client.ts";
 import type { EmitEvent } from "../../src/observability/events.ts";
 
 // A registry stub serving an empty agent list on /agents.
-function emptyRegistry(): { client: RegistryClient; stop: () => Promise<void> } {
+function emptyRegistry(): {
+  client: RegistryClient;
+  stop: () => Promise<void>;
+} {
   const server = Deno.serve({ port: 0, onListen: () => {} }, (req) => {
     if (new URL(req.url).pathname === "/agents") {
-      return new Response("[]", { headers: { "content-type": "application/json" } });
+      return new Response("[]", {
+        headers: { "content-type": "application/json" },
+      });
     }
-    return new Response("null", { headers: { "content-type": "application/json" } });
+    return new Response("null", {
+      headers: { "content-type": "application/json" },
+    });
   });
   const port = (server.addr as Deno.NetAddr).port;
-  return { client: new RegistryClient(`http://localhost:${port}`), stop: () => server.shutdown() };
+  return {
+    client: new RegistryClient(`http://localhost:${port}`),
+    stop: () => server.shutdown(),
+  };
 }
 
 function depsFor(registry: RegistryClient, events: EmitEvent[]): ToolDeps {
@@ -385,7 +489,10 @@ function depsFor(registry: RegistryClient, events: EmitEvent[]): ToolDeps {
     registry,
     bearerToken: "t",
     selfName: "mcp",
-    emit: (e) => { events.push(e); return Promise.resolve(); },
+    emit: (e) => {
+      events.push(e);
+      return Promise.resolve();
+    },
     // spawnAgent/availableRoles omitted -> spawn tools should NOT be listed.
   };
 }
@@ -394,7 +501,13 @@ Deno.test("mcpToolList without spawn deps lists only base tools, in MCP inputSch
   const deps = depsFor(new RegistryClient("http://localhost:1"), []);
   const tools = mcpToolList(deps);
   const names = tools.map((t) => t.name);
-  assertEquals(names, ["list_agents", "list_my_threads", "delegate_start", "delegate_continue", "reset_thread"]);
+  assertEquals(names, [
+    "list_agents",
+    "list_my_threads",
+    "delegate_start",
+    "delegate_continue",
+    "reset_thread",
+  ]);
   // Each tool carries an MCP-shaped JSON Schema under inputSchema (not `parameters`).
   const start = tools.find((t) => t.name === "delegate_start")!;
   assertEquals(start.inputSchema.type, "object");
@@ -440,7 +553,8 @@ Deno.test("callMcpTool flags an error result with isError", async () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `deno test tests/mcp/mcp-server.test.ts --allow-net --allow-env --allow-read --unstable-kv`
+Run:
+`deno test tests/mcp/mcp-server.test.ts --allow-net --allow-env --allow-read --unstable-kv`
 Expected: FAIL — `Module not found "src/mcp-server.ts"`.
 
 - [ ] **Step 3: Implement `src/mcp-server.ts`**
@@ -454,8 +568,16 @@ Create `src/mcp-server.ts`:
 // with depth 0 (delegations then go out at depth 1, exactly like the REPL).
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { getTools, runTool, type BaseTool, type ToolDeps } from "./agent/tools.ts";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import {
+  type BaseTool,
+  getTools,
+  runTool,
+  type ToolDeps,
+} from "./agent/tools.ts";
 import type { OrchestratorContext } from "./orchestrator.ts";
 
 export type McpTool = {
@@ -494,19 +616,31 @@ export async function callMcpTool(
   let isError = false;
   try {
     const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === "object" && "error" in parsed) isError = true;
+    if (parsed && typeof parsed === "object" && "error" in parsed) {
+      isError = true;
+    }
   } catch { /* non-JSON result is a success */ }
-  return { content: [{ type: "text", text }], ...(isError ? { isError: true } : {}) };
+  return {
+    content: [{ type: "text", text }],
+    ...(isError ? { isError: true } : {}),
+  };
 }
 
 /** Build (but do not connect) an MCP Server wired to these deps. Split out so tests can
  *  attach an in-memory transport instead of stdio. */
-export function buildMcpServer(deps: ToolDeps, contextId: string, sessionId: string): Server {
+export function buildMcpServer(
+  deps: ToolDeps,
+  contextId: string,
+  sessionId: string,
+): Server {
   const server = new Server(
     { name: "a2a", version: "1.0.0" },
     { capabilities: { tools: {} } },
   );
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: mcpToolList(deps) }));
+  server.setRequestHandler(
+    ListToolsRequestSchema,
+    () => ({ tools: mcpToolList(deps) }),
+  );
   server.setRequestHandler(CallToolRequestSchema, (req) =>
     callMcpTool(
       deps,
@@ -549,7 +683,8 @@ export async function runMcpServer(ctx: OrchestratorContext): Promise<void> {
 
 - [ ] **Step 4: Run the unit tests to verify they pass**
 
-Run: `deno test tests/mcp/mcp-server.test.ts --allow-net --allow-env --allow-read --unstable-kv`
+Run:
+`deno test tests/mcp/mcp-server.test.ts --allow-net --allow-env --allow-read --unstable-kv`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
@@ -563,9 +698,12 @@ git commit -m "feat(mcp): A2A tool adapter (mcpToolList, callMcpTool, buildMcpSe
 
 ## Task 5: End-to-end test over an in-memory MCP transport
 
-Prove the real SDK wiring works: a real `Client` linked to `buildMcpServer`'s `Server` via the SDK's in-memory transport, listing tools and calling one for real.
+Prove the real SDK wiring works: a real `Client` linked to `buildMcpServer`'s
+`Server` via the SDK's in-memory transport, listing tools and calling one for
+real.
 
 **Files:**
+
 - Modify: `tests/mcp/mcp-server.test.ts` (append)
 
 - [ ] **Step 1: Append the e2e test**
@@ -581,11 +719,14 @@ Deno.test("e2e: an MCP client lists tools and calls list_agents through the serv
   const reg = emptyRegistry();
   const deps = depsFor(reg.client, []);
 
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] = InMemoryTransport
+    .createLinkedPair();
   const server = buildMcpServer(deps, "ctx-e2e", "sess-e2e");
   await server.connect(serverTransport);
 
-  const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: {} });
+  const client = new Client({ name: "test-client", version: "1.0.0" }, {
+    capabilities: {},
+  });
   await client.connect(clientTransport);
 
   const listed = await client.listTools();
@@ -594,7 +735,10 @@ Deno.test("e2e: an MCP client lists tools and calls list_agents through the serv
   assert(names.includes("list_agents"));
 
   const result = await client.callTool({ name: "list_agents", arguments: {} });
-  assertEquals((result.content as { type: string; text: string }[])[0], { type: "text", text: "[]" });
+  assertEquals((result.content as { type: string; text: string }[])[0], {
+    type: "text",
+    text: "[]",
+  });
 
   await client.close();
   await server.close();
@@ -604,13 +748,13 @@ Deno.test("e2e: an MCP client lists tools and calls list_agents through the serv
 
 - [ ] **Step 2: Run to verify it passes**
 
-Run: `deno test tests/mcp/mcp-server.test.ts --allow-net --allow-env --allow-read --unstable-kv`
+Run:
+`deno test tests/mcp/mcp-server.test.ts --allow-net --allow-env --allow-read --unstable-kv`
 Expected: PASS (5 tests total).
 
 - [ ] **Step 3: Run the full suite**
 
-Run: `deno task test`
-Expected: PASS (prior count + 5).
+Run: `deno task test` Expected: PASS (prior count + 5).
 
 - [ ] **Step 4: Commit**
 
@@ -623,9 +767,12 @@ git commit -m "test(mcp): e2e client<->server over in-memory transport"
 
 ## Task 6: MCP entry point (`src/mcp.ts`)
 
-Boot the scaffolding (no REPL) and run the server. Redirect all in-process orchestrator logging off stdout (stdout is the MCP wire), and suppress child-agent stdout via `childStdout: "null"`.
+Boot the scaffolding (no REPL) and run the server. Redirect all in-process
+orchestrator logging off stdout (stdout is the MCP wire), and suppress
+child-agent stdout via `childStdout: "null"`.
 
 **Files:**
+
 - Create: `src/mcp.ts`
 
 - [ ] **Step 1: Implement `src/mcp.ts`**
@@ -649,7 +796,12 @@ Create `src/mcp.ts`:
 //      can't reach our stdout either (their stderr still surfaces real errors).
 console.log = (...args: unknown[]) => console.error(...args);
 
-import { assertBackendCredentials, getAgentsFlag, loadConfig, parseAgentsFlag } from "./config.ts";
+import {
+  assertBackendCredentials,
+  getAgentsFlag,
+  loadConfig,
+  parseAgentsFlag,
+} from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { setupOrchestrator } from "./orchestrator.ts";
 import { runMcpServer } from "./mcp-server.ts";
@@ -671,11 +823,17 @@ let shuttingDown = false;
 const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
-  try { await ctx.shutdown(); } catch { /* ignore */ }
+  try {
+    await ctx.shutdown();
+  } catch { /* ignore */ }
   Deno.exit(0);
 };
-Deno.addSignalListener("SIGINT", () => { void shutdown(); });
-Deno.addSignalListener("SIGTERM", () => { void shutdown(); });
+Deno.addSignalListener("SIGINT", () => {
+  void shutdown();
+});
+Deno.addSignalListener("SIGTERM", () => {
+  void shutdown();
+});
 
 console.error("[mcp] A2A MCP server ready on stdio");
 await runMcpServer(ctx); // resolves when the client disconnects
@@ -684,14 +842,18 @@ await shutdown();
 
 - [ ] **Step 2: Type-check the new entry**
 
-Run: `deno check src/mcp.ts`
-Expected: no errors.
+Run: `deno check src/mcp.ts` Expected: no errors.
 
 - [ ] **Step 3: Confirm stdout stays clean (manual smoke without a client)**
 
-Run: `printf '' | deno task mcp --agents="scout" 1>/tmp/a2a-mcp-stdout.txt 2>/tmp/a2a-mcp-stderr.txt; echo "stdout bytes: $(wc -c < /tmp/a2a-mcp-stdout.txt)"; echo "--- stderr head ---"; head -5 /tmp/a2a-mcp-stderr.txt`
+Run:
+`printf '' | deno task mcp --agents="scout" 1>/tmp/a2a-mcp-stdout.txt 2>/tmp/a2a-mcp-stderr.txt; echo "stdout bytes: $(wc -c < /tmp/a2a-mcp-stdout.txt)"; echo "--- stderr head ---"; head -5 /tmp/a2a-mcp-stderr.txt`
 
-Expected: **`stdout bytes: 0`** (nothing leaked to the MCP wire — this is the key assertion), and stderr shows `[registry] ...`, `[scout] ...`, `[mcp] A2A MCP server ready on stdio`. With empty stdin the transport closes immediately and the process exits. (Requires Ollama for `scout`; otherwise pick a runnable role — the point is only that stdout is empty.)
+Expected: **`stdout bytes: 0`** (nothing leaked to the MCP wire — this is the
+key assertion), and stderr shows `[registry] ...`, `[scout] ...`,
+`[mcp] A2A MCP server ready on stdio`. With empty stdin the transport closes
+immediately and the process exits. (Requires Ollama for `scout`; otherwise pick
+a runnable role — the point is only that stdout is empty.)
 
 - [ ] **Step 4: Commit**
 
@@ -704,9 +866,12 @@ git commit -m "feat(mcp): stdio entry point booting a self-contained orchestrato
 
 ## Task 7: Manual end-to-end smoke script
 
-A runnable check that launches the real server as a subprocess over stdio (the way Claude Code will), lists tools, and calls one — proving the full stdio path, not just in-memory.
+A runnable check that launches the real server as a subprocess over stdio (the
+way Claude Code will), lists tools, and calls one — proving the full stdio path,
+not just in-memory.
 
 **Files:**
+
 - Create: `scripts/smoke-mcp.ts`
 
 - [ ] **Step 1: Implement `scripts/smoke-mcp.ts`**
@@ -735,7 +900,9 @@ const transport = new StdioClientTransport({
   ],
 });
 
-const client = new Client({ name: "smoke-mcp", version: "1.0.0" }, { capabilities: {} });
+const client = new Client({ name: "smoke-mcp", version: "1.0.0" }, {
+  capabilities: {},
+});
 await client.connect(transport);
 
 const tools = await client.listTools();
@@ -757,8 +924,10 @@ Deno.exit(0);
 
 - [ ] **Step 2: Run the smoke (requires Ollama for the `scout` role)**
 
-Run: `deno run -A --unstable-kv --env-file=.env scripts/smoke-mcp.ts`
-Expected: prints the tool names (including `delegate_start`), `list_agents -> [...]` (peers minus self), then `PASS`. (If Ollama isn't running, swap `--agents=scout` for a role you can boot; the smoke only needs one registered agent.)
+Run: `deno run -A --unstable-kv --env-file=.env scripts/smoke-mcp.ts` Expected:
+prints the tool names (including `delegate_start`), `list_agents -> [...]`
+(peers minus self), then `PASS`. (If Ollama isn't running, swap `--agents=scout`
+for a role you can boot; the smoke only needs one registered agent.)
 
 - [ ] **Step 3: Commit**
 
@@ -772,6 +941,7 @@ git commit -m "test(mcp): stdio subprocess smoke script"
 ## Task 8: Documentation
 
 **Files:**
+
 - Modify: `README.md` (add an MCP section; update the roadmap bullet)
 - Modify: `TODO.md` (remove the now-done "MCP wrapping" entry)
 
@@ -812,26 +982,28 @@ final text (no token streaming over MCP).
 
 - [ ] **Step 2: Update the roadmap bullet in `README.md`**
 
-In the "Design + roadmap" list, change the `TODO.md` line so it no longer lists MCP wrapping as a follow-up:
+In the "Design + roadmap" list, change the `TODO.md` line so it no longer lists
+MCP wrapping as a follow-up:
 
 ```markdown
-- `TODO.md` — follow-ups: thread-browser CLI, multi-machine,
-  agent-card consolidation, others
+- `TODO.md` — follow-ups: thread-browser CLI, multi-machine, agent-card
+  consolidation, others
 ```
 
 - [ ] **Step 3: Remove the done entry from `TODO.md`**
 
-Delete the entire "## MCP wrapping" section (`TODO.md:6-19`, through the blank line before "## Thread browser CLI").
+Delete the entire "## MCP wrapping" section (`TODO.md:6-19`, through the blank
+line before "## Thread browser CLI").
 
 - [ ] **Step 4: Verify docs reference real commands**
 
-Run: `grep -n "deno task mcp\|claude mcp add" README.md`
-Expected: both present. Confirm `deno task mcp` exists: `deno task 2>&1 | grep mcp` → shows the `mcp` task.
+Run: `grep -n "deno task mcp\|claude mcp add" README.md` Expected: both present.
+Confirm `deno task mcp` exists: `deno task 2>&1 | grep mcp` → shows the `mcp`
+task.
 
 - [ ] **Step 5: Final full-suite run**
 
-Run: `deno task test`
-Expected: PASS.
+Run: `deno task test` Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -844,8 +1016,29 @@ git commit -m "docs(mcp): document the MCP server entry; drop done TODO"
 
 ## Self-Review notes
 
-- **Spec coverage:** TODO's required surface — `delegate_start`, `delegate_continue`, `list_agents`, `list_my_threads`, `spawn_agent`, `reset_thread` — all flow through `getTools(deps)` → `mcpToolList`/`callMcpTool` (Task 4), verified by the unit test asserting the exact name list and the spawn-tools test. "New entry point that speaks MCP over stdio" = Task 6. "Reuses the existing orchestrator process / in-process registry + tool runner" = Tasks 3+6 (self-contained boot) + the `runTool` reuse in Task 4.
-- **Type consistency:** `OrchestratorContext`/`SetupOpts` (Task 3) are consumed unchanged by `mcpToolDeps`/`runMcpServer` (Task 4). `mcpToolList` returns `McpTool` with `inputSchema: BaseTool["parameters"]`; `BaseTool` is already exported from `tools.ts`. `callMcpTool` signature `(deps, contextId, sessionId, name, args)` matches every call site (tests, `buildMcpServer`).
-- **Deferred / out of scope (intentionally):** no `ask()` convenience tool (locked: mirror raw surface); `web_search` not exposed (`search` unset); no token streaming over MCP (tool calls are blocking — documented). Multi-machine, agent-card consolidation, thread-browser CLI remain separate TODO entries.
-- **Version risk:** the only external unknown is the installed `@modelcontextprotocol/sdk` major (Task 1 Step 2 verifies the import subpaths before any code depends on them). If the org pins a different major, adjust subpaths there.
+- **Spec coverage:** TODO's required surface — `delegate_start`,
+  `delegate_continue`, `list_agents`, `list_my_threads`, `spawn_agent`,
+  `reset_thread` — all flow through `getTools(deps)` →
+  `mcpToolList`/`callMcpTool` (Task 4), verified by the unit test asserting the
+  exact name list and the spawn-tools test. "New entry point that speaks MCP
+  over stdio" = Task 6. "Reuses the existing orchestrator process / in-process
+  registry + tool runner" = Tasks 3+6 (self-contained boot) + the `runTool`
+  reuse in Task 4.
+- **Type consistency:** `OrchestratorContext`/`SetupOpts` (Task 3) are consumed
+  unchanged by `mcpToolDeps`/`runMcpServer` (Task 4). `mcpToolList` returns
+  `McpTool` with `inputSchema: BaseTool["parameters"]`; `BaseTool` is already
+  exported from `tools.ts`. `callMcpTool` signature
+  `(deps, contextId, sessionId, name, args)` matches every call site (tests,
+  `buildMcpServer`).
+- **Deferred / out of scope (intentionally):** no `ask()` convenience tool
+  (locked: mirror raw surface); `web_search` not exposed (`search` unset); no
+  token streaming over MCP (tool calls are blocking — documented).
+  Multi-machine, agent-card consolidation, thread-browser CLI remain separate
+  TODO entries.
+- **Version risk:** the only external unknown is the installed
+  `@modelcontextprotocol/sdk` major (Task 1 Step 2 verifies the import subpaths
+  before any code depends on them). If the org pins a different major, adjust
+  subpaths there.
+
+```
 ```

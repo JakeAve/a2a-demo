@@ -2,7 +2,11 @@
 // Persistence for the monitor. Owns its OWN Deno KV (never the agents' KV).
 // Assigns the authoritative `seq` on ingest and maintains a per-session
 // summary so the sessions list never scans all events.
-import { type A2AEvent, type EmitEvent, parseEvent } from "../src/observability/events.ts";
+import {
+  type A2AEvent,
+  type EmitEvent,
+  parseEvent,
+} from "../src/observability/events.ts";
 
 export type SessionSummary = {
   sessionId: string;
@@ -81,22 +85,33 @@ export class MonitorStore {
     const reqKey = ["session_req", event.sessionId, event.requestId];
     if (!(await this.kv.get(reqKey)).value) await this.kv.set(reqKey, 1);
     let count = 0;
-    for await (const _ of this.kv.list({ prefix: ["session_req", event.sessionId] })) count++;
+    for await (
+      const _ of this.kv.list({ prefix: ["session_req", event.sessionId] })
+    ) count++;
     return count;
   }
 
   async getSessionEvents(sessionId: string): Promise<A2AEvent[]> {
     const out: A2AEvent[] = [];
-    for await (const entry of this.kv.list<A2AEvent>({ prefix: ["evt", sessionId] })) {
+    for await (
+      const entry of this.kv.list<A2AEvent>({ prefix: ["evt", sessionId] })
+    ) {
       out.push(entry.value);
     }
     out.sort((a, b) => a.seq - b.seq);
     return out;
   }
 
-  async getRequestEvents(sessionId: string, requestId: string): Promise<A2AEvent[]> {
+  async getRequestEvents(
+    sessionId: string,
+    requestId: string,
+  ): Promise<A2AEvent[]> {
     const out: A2AEvent[] = [];
-    for await (const entry of this.kv.list<A2AEvent>({ prefix: ["evt", sessionId, requestId] })) {
+    for await (
+      const entry of this.kv.list<A2AEvent>({
+        prefix: ["evt", sessionId, requestId],
+      })
+    ) {
       out.push(entry.value);
     }
     out.sort((a, b) => a.seq - b.seq);
@@ -105,7 +120,9 @@ export class MonitorStore {
 
   async listSessions(): Promise<SessionSummary[]> {
     const out: SessionSummary[] = [];
-    for await (const entry of this.kv.list<SessionSummary>({ prefix: ["session"] })) {
+    for await (
+      const entry of this.kv.list<SessionSummary>({ prefix: ["session"] })
+    ) {
       out.push(entry.value);
     }
     out.sort((a, b) => b.lastEventAt - a.lastEventAt);

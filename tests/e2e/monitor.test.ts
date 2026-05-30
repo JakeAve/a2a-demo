@@ -13,12 +13,56 @@ Deno.test("emitted events for a delegation correlate under one session", async (
   const sessionId = "sess-e2e";
   const requestId = "req-1";
   const base = { sessionId, requestId };
-  await emit({ ...base, agent: "REPL", depth: 0, ts: 1, type: "request.started", data: { target: "coordinator" } });
-  await emit({ ...base, agent: "coordinator", depth: 0, ts: 2, type: "turn.started", data: {} });
-  await emit({ ...base, agent: "coordinator", depth: 0, ts: 3, type: "delegate.start", data: { peer: "scout" }, threadId: "t1" });
-  await emit({ ...base, agent: "scout", depth: 1, ts: 4, type: "message.completed", data: { text: "haiku" } });
-  await emit({ ...base, agent: "coordinator", depth: 0, ts: 5, type: "delegate.return", data: { peer: "scout", ok: true }, threadId: "t1" });
-  await emit({ ...base, agent: "coordinator", depth: 0, ts: 6, type: "message.completed", data: { text: "final" } });
+  await emit({
+    ...base,
+    agent: "REPL",
+    depth: 0,
+    ts: 1,
+    type: "request.started",
+    data: { target: "coordinator" },
+  });
+  await emit({
+    ...base,
+    agent: "coordinator",
+    depth: 0,
+    ts: 2,
+    type: "turn.started",
+    data: {},
+  });
+  await emit({
+    ...base,
+    agent: "coordinator",
+    depth: 0,
+    ts: 3,
+    type: "delegate.start",
+    data: { peer: "scout" },
+    threadId: "t1",
+  });
+  await emit({
+    ...base,
+    agent: "scout",
+    depth: 1,
+    ts: 4,
+    type: "message.completed",
+    data: { text: "haiku" },
+  });
+  await emit({
+    ...base,
+    agent: "coordinator",
+    depth: 0,
+    ts: 5,
+    type: "delegate.return",
+    data: { peer: "scout", ok: true },
+    threadId: "t1",
+  });
+  await emit({
+    ...base,
+    agent: "coordinator",
+    depth: 0,
+    ts: 6,
+    type: "message.completed",
+    data: { text: "final" },
+  });
 
   // Emits are fire-and-forget POSTs; poll until all 6 have landed (or time out)
   // rather than sleeping a fixed amount — robust under variable CI load.

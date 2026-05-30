@@ -36,8 +36,15 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
     throw new Error(`${source}: not an object`);
   }
   const o = v as Record<string, unknown>;
-  if (o.backend !== "claude" && o.backend !== "ollama" && o.backend !== "claude-code") {
-    throw new Error(`${source}: backend must be "claude", "ollama", or "claude-code" (got ${JSON.stringify(o.backend)})`);
+  if (
+    o.backend !== "claude" && o.backend !== "ollama" &&
+    o.backend !== "claude-code"
+  ) {
+    throw new Error(
+      `${source}: backend must be "claude", "ollama", or "claude-code" (got ${
+        JSON.stringify(o.backend)
+      })`,
+    );
   }
   if (typeof o.model !== "string" || !o.model) {
     throw new Error(`${source}: model must be a non-empty string`);
@@ -49,7 +56,9 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
     throw new Error(`${source}: systemPrompt must be a string`);
   }
   if (!Array.isArray(o.skills) || !o.skills.every(isSkill)) {
-    throw new Error(`${source}: skills must be an array of { id, name, description }`);
+    throw new Error(
+      `${source}: skills must be an array of { id, name, description }`,
+    );
   }
   if (o.toolCapable !== undefined && typeof o.toolCapable !== "boolean") {
     throw new Error(`${source}: toolCapable must be a boolean if present`);
@@ -97,7 +106,9 @@ export async function loadRoles(
   try {
     text = await Deno.readTextFile(path);
   } catch (e) {
-    throw new Error(`could not read agents file "${path}": ${(e as Error).message}`);
+    throw new Error(
+      `could not read agents file "${path}": ${(e as Error).message}`,
+    );
   }
 
   let raw: unknown;
@@ -108,7 +119,9 @@ export async function loadRoles(
   }
 
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error(`${path}: expected a JSON object mapping role name to preset`);
+    throw new Error(
+      `${path}: expected a JSON object mapping role name to preset`,
+    );
   }
 
   const obj = raw as Record<string, unknown>;

@@ -17,7 +17,10 @@ Deno.test("registry: register, list, get, deregister", async () => {
   const base = `http://localhost:${reg.port}`;
 
   const a = card("alpha", 1111);
-  await (await fetch(`${base}/register`, { method: "POST", body: JSON.stringify(a) })).body?.cancel();
+  await (await fetch(`${base}/register`, {
+    method: "POST",
+    body: JSON.stringify(a),
+  })).body?.cancel();
 
   const list = await (await fetch(`${base}/agents`)).json();
   assertEquals(list.length, 1);
@@ -26,7 +29,8 @@ Deno.test("registry: register, list, get, deregister", async () => {
   const one = await (await fetch(`${base}/agents/alpha`)).json();
   assertEquals(one.url, "http://localhost:1111");
 
-  await (await fetch(`${base}/register/alpha`, { method: "DELETE" })).body?.cancel();
+  await (await fetch(`${base}/register/alpha`, { method: "DELETE" })).body
+    ?.cancel();
   const after = await (await fetch(`${base}/agents`)).json();
   assertEquals(after.length, 0);
 

@@ -19,16 +19,28 @@ export function roomPostLabel(event) {
 export function roomBadgeLabel(event) {
   const d = event.data ?? {};
   switch (event.type) {
-    case "room.created":         return `created: "${clip(d.title ?? "", 16)}" (${(d.members ?? []).join(", ")})`;
-    case "room.invited":         return `invited ${d.agent ?? "?"}`;
-    case "room.ack":             return `ack from ${event.agent ?? "?"}`;
-    case "room.left":            return `${d.agent ?? "?"} left`;
-    case "room.idle":            return "idle";
-    case "room.capped":          return `capped @${d.turnCount ?? "?"}`;
-    case "room.turn_timeout":    return `timeout: ${d.member ?? "?"}`;
-    case "room.delivery_failed": return `failed: ${d.member ?? "?"}`;
-    case "room.closed":          return "closed";
-    default:                     return event.type;
+    case "room.created":
+      return `created: "${clip(d.title ?? "", 16)}" (${
+        (d.members ?? []).join(", ")
+      })`;
+    case "room.invited":
+      return `invited ${d.agent ?? "?"}`;
+    case "room.ack":
+      return `ack from ${event.agent ?? "?"}`;
+    case "room.left":
+      return `${d.agent ?? "?"} left`;
+    case "room.idle":
+      return "idle";
+    case "room.capped":
+      return `capped @${d.turnCount ?? "?"}`;
+    case "room.turn_timeout":
+      return `timeout: ${d.member ?? "?"}`;
+    case "room.delivery_failed":
+      return `failed: ${d.member ?? "?"}`;
+    case "room.closed":
+      return "closed";
+    default:
+      return event.type;
   }
 }
 
@@ -37,6 +49,8 @@ export function roomBadgeLabel(event) {
 // For named lists, filters out `"*"` tokens and the sender; does NOT
 // validate names against memberSet (callers own that guard).
 export function expandRoomTo(to, from, memberSet) {
-  if (to.length === 1 && to[0] === "*") return [...memberSet].filter(n => n !== from);
-  return to.filter(n => n !== "*" && n !== from);
+  if (to.length === 1 && to[0] === "*") {
+    return [...memberSet].filter((n) => n !== from);
+  }
+  return to.filter((n) => n !== "*" && n !== from);
 }

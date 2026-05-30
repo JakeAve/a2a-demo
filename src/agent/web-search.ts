@@ -5,7 +5,10 @@
 
 export type SearchResult = { title: string; url: string; content: string };
 
-export type WebSearchProvider = (query: string, maxResults?: number) => Promise<SearchResult[]>;
+export type WebSearchProvider = (
+  query: string,
+  maxResults?: number,
+) => Promise<SearchResult[]>;
 
 // Config fields a provider might need. Extend as new providers are added
 // (e.g. searxngUrl, tavilyApiKey) without touching the agent backends.
@@ -23,7 +26,10 @@ export function ollamaSearchProvider(
   return async (query, maxResults = 5) => {
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({ query, max_results: maxResults }),
     });
     if (!res.ok) throw new Error(`ollama web_search ${res.status}`);
@@ -31,7 +37,9 @@ export function ollamaSearchProvider(
     return (json.results ?? []).map((r: Record<string, unknown>) => ({
       title: String(r.title ?? ""),
       url: String(r.url ?? ""),
-      content: typeof r.content === "string" ? r.content : JSON.stringify(r.content ?? ""),
+      content: typeof r.content === "string"
+        ? r.content
+        : JSON.stringify(r.content ?? ""),
     }));
   };
 }
@@ -39,7 +47,9 @@ export function ollamaSearchProvider(
 // Pick a provider from config. Returns undefined when none is configured, in
 // which case web_search simply isn't offered to agents. Add new branches here
 // as providers are implemented.
-export function selectSearchProvider(cfg: SearchConfig): WebSearchProvider | undefined {
+export function selectSearchProvider(
+  cfg: SearchConfig,
+): WebSearchProvider | undefined {
   if (cfg.ollamaApiKey) return ollamaSearchProvider(cfg.ollamaApiKey);
   return undefined;
 }

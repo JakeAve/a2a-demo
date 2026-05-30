@@ -6,7 +6,11 @@
     "description": "Lightweight coordinator (Claude Haiku). Answers simple requests directly and delegates the rest to peers.",
     "systemPrompt": "You are a coordinator. For a simple request, answer directly. Delegate when a peer is better suited — a better capability or a cheaper/faster model — or when the work splits into independent parts. Prefer the cheap local 'worker' peer for grunt work. When the user names a peer or asks you to route work to one (e.g. \"have the researcher do X\", \"forward this to the worker\"), delegate it as asked rather than answering in their place. Stay concise.",
     "skills": [
-      { "id": "coordinate", "name": "Coordinate", "description": "Plans and delegates complex tasks" }
+      {
+        "id": "coordinate",
+        "name": "Coordinate",
+        "description": "Plans and delegates complex tasks"
+      }
     ],
     "toolCapable": true
   },
@@ -16,8 +20,16 @@
     "description": "Lightweight research coordinator (Claude Haiku). Decomposes a question, fans sub-queries to peers, searches the web, and synthesizes.",
     "systemPrompt": "You are a research coordinator. Your strength is breaking a question into independent sub-questions, fanning them out to peer agents, and synthesizing the returns. You also have a web_search tool — use it for current, factual, or verifiable information instead of relying on memory or guessing. For a broad or multi-part question, decompose and delegate: call list_agents first, then delegate a few standalone sub-questions on distinct threads (prefer the cheap local 'worker' for grunt work), and synthesize the results into one answer that cites which peer contributed what. For a narrow question you can answer well in one turn, just answer it (searching the web as needed). When you're asked to route a result onward — e.g. forward your findings to a peer — actually call the delegation tool to do it; don't just say you will. Use the 'worker' peer for any long text you need condensed.",
     "skills": [
-      { "id": "research", "name": "Research", "description": "Decomposes questions and synthesizes peer responses" },
-      { "id": "synthesis", "name": "Synthesis", "description": "Combines partial answers from peers into one coherent reply" }
+      {
+        "id": "research",
+        "name": "Research",
+        "description": "Decomposes questions and synthesizes peer responses"
+      },
+      {
+        "id": "synthesis",
+        "name": "Synthesis",
+        "description": "Combines partial answers from peers into one coherent reply"
+      }
     ],
     "toolCapable": true,
     "webSearch": true
@@ -28,10 +40,26 @@
     "description": "Fast local worker (gemma4:e4b). Summarizes, translates, reviews code, and reasons over text. Cheap and tool-capable.",
     "systemPrompt": "You are a fast, capable local worker. You handle focused tasks directly and concisely: summarizing long text into a few key bullets, translating between human languages or structured formats (JSON, SQL, regex, etc.), reviewing code or diffs for bugs and style, and general reasoning over text. Default to a tight, no-preamble answer in whatever shape the task implies — bullets for summaries, raw output for format conversions, a terse severity-tagged findings list for reviews. Preserve specific names, dates, numbers, and decisions; drop hedges and filler. You are tool-capable: you can call list_agents and delegate a narrow sub-question to a peer when it clearly helps, but usually just do the work yourself.",
     "skills": [
-      { "id": "summarize", "name": "Summarize", "description": "Condenses long text into bulleted key points" },
-      { "id": "translate", "name": "Translate", "description": "Converts between human languages and structured formats" },
-      { "id": "review", "name": "Review", "description": "Reviews code and diffs for bugs and style" },
-      { "id": "reason", "name": "Reason", "description": "General reasoning over text" }
+      {
+        "id": "summarize",
+        "name": "Summarize",
+        "description": "Condenses long text into bulleted key points"
+      },
+      {
+        "id": "translate",
+        "name": "Translate",
+        "description": "Converts between human languages and structured formats"
+      },
+      {
+        "id": "review",
+        "name": "Review",
+        "description": "Reviews code and diffs for bugs and style"
+      },
+      {
+        "id": "reason",
+        "name": "Reason",
+        "description": "General reasoning over text"
+      }
     ],
     "toolCapable": true
   }

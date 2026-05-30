@@ -70,13 +70,33 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
     const startedTs = now();
     void emit({ ...base, ts: startedTs, type: "turn.started", data: {} });
     try {
-      const result = await cfg.handler({ depth, message: body.message, sessionId, requestId });
-      void emit({ ...base, ts: now(), type: "message.completed", data: { text: result.text } });
+      const result = await cfg.handler({
+        depth,
+        message: body.message,
+        sessionId,
+        requestId,
+      });
+      void emit({
+        ...base,
+        ts: now(),
+        type: "message.completed",
+        data: { text: result.text },
+      });
       const endTs = now();
-      void emit({ ...base, ts: endTs, type: "turn.completed", data: { durationMs: endTs - startedTs, status: "ok" } });
+      void emit({
+        ...base,
+        ts: endTs,
+        type: "turn.completed",
+        data: { durationMs: endTs - startedTs, status: "ok" },
+      });
       return c.json({ text: result.text });
     } catch (e) {
-      void emit({ ...base, ts: now(), type: "error", data: { message: (e as Error).message, where: "send" } });
+      void emit({
+        ...base,
+        ts: now(),
+        type: "error",
+        data: { message: (e as Error).message, where: "send" },
+      });
       return c.json({ error: (e as Error).message }, 500);
     }
   });
@@ -98,23 +118,48 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
           controller.enqueue(enc.encode(`data: ${JSON.stringify(ev)}\n\n`));
         let acc = "";
         try {
-          for await (const ev of cfg.streamHandler({ depth, message: body.message, sessionId, requestId })) {
+          for await (
+            const ev of cfg.streamHandler({
+              depth,
+              message: body.message,
+              sessionId,
+              requestId,
+            })
+          ) {
             if (ev.type === "delta") acc += ev.text;
             write(ev);
           }
-          void emit({ ...base, ts: now(), type: "message.completed", data: { text: acc } });
+          void emit({
+            ...base,
+            ts: now(),
+            type: "message.completed",
+            data: { text: acc },
+          });
           const streamEndTs = now();
-          void emit({ ...base, ts: streamEndTs, type: "turn.completed", data: { durationMs: streamEndTs - startedTs, status: "ok" } });
+          void emit({
+            ...base,
+            ts: streamEndTs,
+            type: "turn.completed",
+            data: { durationMs: streamEndTs - startedTs, status: "ok" },
+          });
         } catch (e) {
           write({ type: "error", message: (e as Error).message });
-          void emit({ ...base, ts: now(), type: "error", data: { message: (e as Error).message, where: "stream" } });
+          void emit({
+            ...base,
+            ts: now(),
+            type: "error",
+            data: { message: (e as Error).message, where: "stream" },
+          });
         }
         controller.enqueue(enc.encode(`data: [DONE]\n\n`));
         controller.close();
       },
     });
     return new Response(stream, {
-      headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
     });
   });
 
@@ -122,10 +167,16 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
 
   app.post("/inbox", async (c) => {
     const authz = c.req.header("authorization") ?? "";
-    if (authz !== `Bearer ${cfg.bearerToken}`) return c.json({ error: "unauthorized" }, 401);
+    if (authz !== `Bearer ${cfg.bearerToken}`) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
     if (!inbox) return c.json({ error: "agent has no inbox" }, 501);
     let body: unknown;
-    try { body = await c.req.json(); } catch { return c.json({ error: "bad json" }, 400); }
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "bad json" }, 400);
+    }
     inbox.enqueue(body as InboxDelivery);
     return c.json({ ok: true }, 202);
   });

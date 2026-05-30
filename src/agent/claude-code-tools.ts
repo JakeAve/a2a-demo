@@ -1,6 +1,6 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import { getTools, runTool, type EmitIds, type ToolDeps } from "./tools.ts";
+import { type EmitIds, getTools, runTool, type ToolDeps } from "./tools.ts";
 
 export type ToolRunner = (
   deps: ToolDeps,
@@ -18,7 +18,9 @@ const SHAPES: Record<string, z.ZodRawShape> = {
   delegate_start: {
     agent: z.string().describe("Target agent name"),
     prompt: z.string().describe("What to ask the peer agent"),
-    title: z.string().optional().describe("Optional short label for this thread"),
+    title: z.string().optional().describe(
+      "Optional short label for this thread",
+    ),
   },
   delegate_continue: {
     threadId: z.string().describe("threadId to continue"),
@@ -30,8 +32,12 @@ const SHAPES: Record<string, z.ZodRawShape> = {
   list_roles: {},
   spawn_agent: {
     role: z.string().describe("Role name from list_roles"),
-    name: z.string().optional().describe("Optional unique name (defaults to role)"),
-    model: z.string().optional().describe("Optional model override (e.g. 'gemma3:1b')"),
+    name: z.string().optional().describe(
+      "Optional unique name (defaults to role)",
+    ),
+    model: z.string().optional().describe(
+      "Optional model override (e.g. 'gemma3:1b')",
+    ),
   },
 };
 
@@ -64,7 +70,12 @@ export function buildA2aMcpServer(
   ids?: EmitIds,
 ) {
   const tools = getTools(deps).map((t) =>
-    tool(t.name, t.description, SHAPES[t.name], makeToolHandler(deps, t.name, depth, contextId, run, ids))
+    tool(
+      t.name,
+      t.description,
+      SHAPES[t.name],
+      makeToolHandler(deps, t.name, depth, contextId, run, ids),
+    )
   );
   return createSdkMcpServer({ name: "a2a", version: "1.0.0", tools });
 }

@@ -10,19 +10,37 @@ import type { RolePreset } from "../../src/roles.ts";
 Deno.test("buildHandlers returns handler + streamHandler for a claude-code preset", async () => {
   const kv = await Deno.openKv(":memory:");
   const preset: RolePreset = {
-    backend: "claude-code", model: "claude-opus-4-8", description: "", systemPrompt: "s",
-    skills: [], toolCapable: true,
+    backend: "claude-code",
+    model: "claude-opus-4-8",
+    description: "",
+    systemPrompt: "s",
+    skills: [],
+    toolCapable: true,
   };
   const cfg: AppConfig = {
-    registryPort: 1, anthropicApiKey: "", claudeCodeOauthToken: "sk-oat",
-    bearerToken: "t", ollamaBaseUrl: "x", ollamaApiKey: "", monitorUrl: "", maxDepth: 0,
-    roomBrokerPort: 7892, roomMaxTurns: 24, agentDeadlineMs: 120_000, humanDeadlineMs: 3_600_000,
+    registryPort: 1,
+    anthropicApiKey: "",
+    claudeCodeOauthToken: "sk-oat",
+    bearerToken: "t",
+    ollamaBaseUrl: "x",
+    ollamaApiKey: "",
+    monitorUrl: "",
+    maxDepth: 0,
+    roomBrokerPort: 7892,
+    roomMaxTurns: 24,
+    agentDeadlineMs: 120_000,
+    humanDeadlineMs: 3_600_000,
     humanName: "human",
   };
   const h = await buildHandlers({
-    model: "claude-opus-4-8", preset, cfg,
-    store: new ContextStore(kv), threads: new ThreadStore(kv), sessions: new SessionStore(kv),
-    registry: {} as RegistryClient, selfName: "coordinator-max",
+    model: "claude-opus-4-8",
+    preset,
+    cfg,
+    store: new ContextStore(kv),
+    threads: new ThreadStore(kv),
+    sessions: new SessionStore(kv),
+    registry: {} as RegistryClient,
+    selfName: "coordinator-max",
   });
   assertEquals(typeof h.handler, "function");
   assertEquals(typeof h.streamHandler, "function");

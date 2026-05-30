@@ -1,4 +1,9 @@
-import { assertBackendCredentials, getAgentsFlag, loadConfig, parseAgentsFlag } from "./config.ts";
+import {
+  assertBackendCredentials,
+  getAgentsFlag,
+  loadConfig,
+  parseAgentsFlag,
+} from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { runOrchestrator } from "./orchestrator.ts";
 

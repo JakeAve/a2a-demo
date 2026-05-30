@@ -1,15 +1,15 @@
 # Web UI Monitor — Design
 
-**Date:** 2026-05-28
-**Status:** Approved (brainstorm), pending implementation plan
+**Date:** 2026-05-28 **Status:** Approved (brainstorm), pending implementation
+plan
 
 ## Goal
 
-Give a human visibility into what a multi-agent A2A run is doing. Today the
-only interaction surface is the REPL, which streams the depth-0 agent but hides
+Give a human visibility into what a multi-agent A2A run is doing. Today the only
+interaction surface is the REPL, which streams the depth-0 agent but hides
 everything below it: when an agent delegates, the peer's work happens over a
-synchronous `/message/send` and is invisible. The result is that a
-multi-agent, multi-directional delegation tree is hard to reason about.
+synchronous `/message/send` and is invisible. The result is that a multi-agent,
+multi-directional delegation tree is hard to reason about.
 
 This design adds an **optional, isolated monitor service** plus a **web UI**
 that visualizes a run as a swimlane/sequence diagram — one lane per agent, every
@@ -43,8 +43,8 @@ delegation and reply an arrow over time.
 
 - **`sessionId`** — one driver run (today's REPL `contextId` lifetime). Minted
   once per REPL run. The thing you "link into."
-- **`requestId`** — one top-level prompt within a run (e.g. `@coordinator do X`).
-  Minted per REPL line.
+- **`requestId`** — one top-level prompt within a run (e.g.
+  `@coordinator do X`). Minted per REPL line.
 
 Both are **propagated unchanged** through every delegation hop as HTTP headers
 (`x-session`, `x-request`), mirroring the existing `x-depth` pattern in
@@ -77,7 +77,8 @@ whole tree trivially — no stitching, no out-of-order races.
 Three independently understandable units:
 
 1. **Emit shim** (in the agent process) — fire-and-forget event export.
-2. **Monitor service** (standalone) — ingest + fan-out + persistence + serves UI.
+2. **Monitor service** (standalone) — ingest + fan-out + persistence + serves
+   UI.
 3. **Web UI** (static, served by the monitor) — the swimlane session view.
 
 ## Event model
@@ -87,17 +88,17 @@ One envelope for every event:
 ```ts
 type A2AEvent = {
   // correlation (propagated, never re-minted downstream)
-  sessionId: string;     // driver run
-  requestId: string;     // top-level prompt
-  seq: number;           // monitor-assigned ingest order — the stable sort key
-  ts: number;            // emitter epoch-ms — for display & durations
+  sessionId: string; // driver run
+  requestId: string; // top-level prompt
+  seq: number; // monitor-assigned ingest order — the stable sort key
+  ts: number; // emitter epoch-ms — for display & durations
   // origin
-  agent: string;         // emitting agent name
+  agent: string; // emitting agent name
   depth: number;
-  threadId?: string;     // the delegation thread this belongs to, if any
+  threadId?: string; // the delegation thread this belongs to, if any
   // payload
   type: EventType;
-  data: Record<string, unknown>;  // type-specific; previews truncated at emitter
+  data: Record<string, unknown>; // type-specific; previews truncated at emitter
 };
 ```
 
@@ -107,23 +108,23 @@ ordering the UI sorts by.
 
 **Event types (v1 milestones)** and their swimlane rendering:
 
-| type | data (previewed) | swimlane rendering |
-|---|---|---|
-| `request.started` | `target, prompt` | REPL → agent arrow |
-| `turn.started` | `model, backend` | lane activity begins |
-| `delegate.start` | `peer, threadId, title, prompt` | solid arrow out |
-| `delegate.continue` | `peer, threadId, turn, prompt` | solid arrow out (turn n) |
-| `delegate.return` | `peer, threadId, ok, durationMs, preview` | dashed arrow back |
-| `tool.call` | `tool, argsPreview, resultPreview, durationMs` | self-loop |
-| `spawn` | `role, name, model, ok` | self-loop → activates new lane |
-| `message.completed` | `text, tokensIn?, tokensOut?` | top agent → REPL return |
-| `turn.completed` | `durationMs, status` | lane settles |
-| `error` | `message, where` | red marker |
-| `request.completed` | `durationMs` | request closes |
+| type                | data (previewed)                               | swimlane rendering             |
+| ------------------- | ---------------------------------------------- | ------------------------------ |
+| `request.started`   | `target, prompt`                               | REPL → agent arrow             |
+| `turn.started`      | `model, backend`                               | lane activity begins           |
+| `delegate.start`    | `peer, threadId, title, prompt`                | solid arrow out                |
+| `delegate.continue` | `peer, threadId, turn, prompt`                 | solid arrow out (turn n)       |
+| `delegate.return`   | `peer, threadId, ok, durationMs, preview`      | dashed arrow back              |
+| `tool.call`         | `tool, argsPreview, resultPreview, durationMs` | self-loop                      |
+| `spawn`             | `role, name, model, ok`                        | self-loop → activates new lane |
+| `message.completed` | `text, tokensIn?, tokensOut?`                  | top agent → REPL return        |
+| `turn.completed`    | `durationMs, status`                           | lane settles                   |
+| `error`             | `message, where`                               | red marker                     |
+| `request.completed` | `durationMs`                                   | request closes                 |
 
 **Reply arrows — avoiding double-draw:** every agent emits `message.completed`
 when it finishes a turn, but the inbound arrow from a peer is drawn by the
-*caller's* `delegate.return` (the caller is the one that knows the thread and
+_caller's_ `delegate.return` (the caller is the one that knows the thread and
 timing). So a peer's `message.completed` is informational (it enriches the
 detail panel); only the **depth-0** agent's `message.completed` renders as a
 visible arrow — the final return to the REPL lane. The UI keys off `depth` to
@@ -140,13 +141,13 @@ the single source of truth, imported by both the emit shim and the monitor.
 Hono app (same stack as `src/registry/server.ts`). Its own entry point, port,
 and **named** Deno KV (`a2a-monitor.db`) — never the agents' default KV.
 
-| route | purpose |
-|---|---|
-| `POST /ingest` | accept one event or a batch; optional bearer (`AGENT_BEARER_TOKEN`) so stray local processes can't spam |
-| `GET /api/sessions` | session summaries, newest first |
-| `GET /api/sessions/:id` | summary + all events for initial load / replay |
-| `GET /stream?session=:id` | SSE live feed; `session=*` for the sessions-list page |
-| `GET /` + assets | serve the static web UI |
+| route                     | purpose                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `POST /ingest`            | accept one event or a batch; optional bearer (`AGENT_BEARER_TOKEN`) so stray local processes can't spam |
+| `GET /api/sessions`       | session summaries, newest first                                                                         |
+| `GET /api/sessions/:id`   | summary + all events for initial load / replay                                                          |
+| `GET /stream?session=:id` | SSE live feed; `session=*` for the sessions-list page                                                   |
+| `GET /` + assets          | serve the static web UI                                                                                 |
 
 **Ingest flow:** validate envelope (zod) → assign `seq` (per-session counter,
 rehydrated from the session summary's `lastSeq` after a restart) → write KV row
@@ -188,16 +189,16 @@ monitor/
 - **`src/observability/emit.ts` (new):** `createEmitter(monitorUrl?, token?)` →
   `emit(event)`. No URL → no-op. Otherwise fire-and-forget
   (`void fetch(...).catch(() => {})`); never blocks or throws into the agent
-  path. Sourced from config (`A2A_MONITOR_URL`) and threaded through the existing
-  deps objects — no new globals.
+  path. Sourced from config (`A2A_MONITOR_URL`) and threaded through the
+  existing deps objects — no new globals.
 - **`src/repl.ts`:** mint `sessionId` per run, `requestId` per line; emit
   `request.started` / `request.completed`; pass ids into `streamMessage`.
-- **`src/protocol/client.ts`:** `sendMessage` / `streamMessage` gain
-  `sessionId` / `requestId` params, sent as `x-session` / `x-request` headers
-  next to `x-depth`. `delegate()` forwards them unchanged.
+- **`src/protocol/client.ts`:** `sendMessage` / `streamMessage` gain `sessionId`
+  / `requestId` params, sent as `x-session` / `x-request` headers next to
+  `x-depth`. `delegate()` forwards them unchanged.
 - **`src/agent/base.ts`:** read `x-session` / `x-request` / `x-depth` off the
-  incoming request onto the handler ctx; emit `turn.started` /
-  `turn.completed` / `error` around the handler.
+  incoming request onto the handler ctx; emit `turn.started` / `turn.completed`
+  / `error` around the handler.
 - **`src/agent/tools.ts` (`runTool` + `delegate`):** emit `delegate.start` /
   `delegate.continue` / `delegate.return`, `tool.call`, `spawn`. Adds `emit` +
   ids to `ToolDeps`. `delegate()` forwards the propagation headers.
@@ -214,13 +215,13 @@ little. Vanilla TS/HTML/SVG.
 **Pages:**
 
 1. **Sessions list** — from `GET /api/sessions`; rows show session id, start
-   time, agent count, request count, status. Subscribes to `GET /stream?session=*`
-   so new/changed sessions appear live. Click a row to open it. This is the
-   "link into a session" entry point (`/#/session/<id>`).
+   time, agent count, request count, status. Subscribes to
+   `GET /stream?session=*` so new/changed sessions appear live. Click a row to
+   open it. This is the "link into a session" entry point (`/#/session/<id>`).
 2. **Session view (swimlanes)** — the B mockup:
    - Top bar: session summary + per-request tabs.
-   - Canvas: one lane per agent (header shows backend/model); time runs
-     top-down (left gutter); arrows per the rendering table above. Solid amber =
+   - Canvas: one lane per agent (header shows backend/model); time runs top-down
+     (left gutter); arrows per the rendering table above. Solid amber =
      delegation out, dashed green = reply, loops = self tool-calls; spawns
      activate a new lane mid-session; errors show a red marker.
    - Detail panel: selected arrow's full content (thread id, turn, timing,
@@ -237,16 +238,16 @@ late-joining browser renders identically from history then continues live.
 
 Emitter side (in `.env`, read by `src/config.ts`):
 
-| var | default | purpose |
-|---|---|---|
+| var               | default   | purpose                                       |
+| ----------------- | --------- | --------------------------------------------- |
 | `A2A_MONITOR_URL` | — (unset) | where to POST events; unset → emit is a no-op |
 
 Monitor side (its own flags/env):
 
-| var | default | purpose |
-|---|---|---|
-| `MONITOR_PORT` | `7891` | monitor HTTP port |
-| `MONITOR_KV_PATH` | `./a2a-monitor.db` | monitor's named KV file |
+| var                  | default            | purpose                             |
+| -------------------- | ------------------ | ----------------------------------- |
+| `MONITOR_PORT`       | `7891`             | monitor HTTP port                   |
+| `MONITOR_KV_PATH`    | `./a2a-monitor.db` | monitor's named KV file             |
 | `AGENT_BEARER_TOKEN` | `local-dev-secret` | optional shared secret on `/ingest` |
 
 `deno.json` gains a `monitor` task:
@@ -258,8 +259,8 @@ Follow existing `deno test` patterns under `tests/`.
 
 - **`emit`:** no-op when `A2A_MONITOR_URL` unset; POSTs a well-formed envelope
   when set; swallows fetch errors without throwing into the caller.
-- **propagation:** `sendMessage` / `streamMessage` send `x-session` / `x-request`;
-  `base` reads them onto ctx; `delegate()` forwards them unchanged.
+- **propagation:** `sendMessage` / `streamMessage` send `x-session` /
+  `x-request`; `base` reads them onto ctx; `delegate()` forwards them unchanged.
 - **monitor store:** `seq` is monotonic per session and rehydrates after a
   simulated restart; session summary updates incrementally; range reads return a
   session and a single request correctly.

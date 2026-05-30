@@ -5,7 +5,11 @@
 // 1b114ce1: the researcher narrated "I'll forward to the summarizer" and then
 // ended its turn without ever calling a delegation tool.
 import { assert } from "@std/assert";
-import { buildSystemSuffix, DELEGATION_SUFFIX, type ToolDeps } from "../../src/agent/tools.ts";
+import {
+  buildSystemSuffix,
+  DELEGATION_SUFFIX,
+  type ToolDeps,
+} from "../../src/agent/tools.ts";
 import { loadRoles } from "../../src/roles.ts";
 
 // buildSystemSuffix only branches on deps.spawnAgent; a bare cast is enough.
@@ -37,7 +41,10 @@ Deno.test("researcher prompt defaults to decompose-and-delegate", async () => {
   // Pin to the committed defaults so a local agents.json can't affect this.
   const roles = await loadRoles({ overridePath: "agents.default.json" });
   const p = roles.researcher.systemPrompt;
-  assert(/decompose|break|sub-question/i.test(p), "researcher should frame decomposition");
+  assert(
+    /decompose|break|sub-question/i.test(p),
+    "researcher should frame decomposition",
+  );
   assert(/delegat/i.test(p), "researcher should frame delegation");
   // The suppression phrasings that contradicted the researcher's whole purpose.
   assert(
@@ -54,5 +61,8 @@ Deno.test("coordinator prompt honors named-peer routing", async () => {
   // Pin to the committed defaults so a local agents.json can't affect this.
   const roles = await loadRoles({ overridePath: "agents.default.json" });
   const p = roles.coordinator.systemPrompt;
-  assert(/route|name|ask/i.test(p), "coordinator should honor routing to a named peer");
+  assert(
+    /route|name|ask/i.test(p),
+    "coordinator should honor routing to a named peer",
+  );
 });

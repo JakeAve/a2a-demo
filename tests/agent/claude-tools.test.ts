@@ -15,10 +15,15 @@ Deno.test("buildAnthropicTools omits web_search by default", () => {
 
 Deno.test("buildAnthropicTools appends the server web_search tool when enabled", () => {
   const tools = buildAnthropicTools(deps, true);
-  const ws = tools.find((t) => (t as { name?: string }).name === "web_search") as
+  const ws = tools.find((t) =>
+    (t as { name?: string }).name === "web_search"
+  ) as
     | { type?: string }
     | undefined;
   assertEquals(ws?.type, "web_search_20250305");
   // the A2A tools are still there alongside it
-  assertEquals(tools.some((t) => (t as { name?: string }).name === "list_agents"), true);
+  assertEquals(
+    tools.some((t) => (t as { name?: string }).name === "list_agents"),
+    true,
+  );
 });

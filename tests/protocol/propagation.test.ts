@@ -21,7 +21,11 @@ Deno.test("sendMessage forwards x-session and x-request headers", async () => {
     depth: 1,
     sessionId: "s1",
     requestId: "r1",
-    message: { messageId: "m1", role: "agent", parts: [{ type: "text", text: "hi" }] },
+    message: {
+      messageId: "m1",
+      role: "agent",
+      parts: [{ type: "text", text: "hi" }],
+    },
   });
 
   await server.shutdown();

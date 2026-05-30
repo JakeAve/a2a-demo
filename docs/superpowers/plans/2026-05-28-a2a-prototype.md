@@ -1,12 +1,23 @@
 # A2A Prototype Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Deno + TypeScript A2A prototype where a Claude-backed agent delegates work to Ollama-backed agents (and back), discovered via a central registry, with a streaming REPL.
+**Goal:** Build a Deno + TypeScript A2A prototype where a Claude-backed agent
+delegates work to Ollama-backed agents (and back), discovered via a central
+registry, with a streaming REPL.
 
-**Architecture:** Single Deno process boots a registry on port 7890 plus N agents on OS-assigned ports. Each agent is a self-contained Hono server exposing `/.well-known/agent.json`, `/message/send`, `/message/stream`. Claude-backed agents inject `list_agents` + `delegate_task` tools so the model autonomously routes work to peers (max delegation depth 2). Conversation history persists in Deno KV by `contextId`. Shared bearer-token auth on all A2A calls.
+**Architecture:** Single Deno process boots a registry on port 7890 plus N
+agents on OS-assigned ports. Each agent is a self-contained Hono server exposing
+`/.well-known/agent.json`, `/message/send`, `/message/stream`. Claude-backed
+agents inject `list_agents` + `delegate_task` tools so the model autonomously
+routes work to peers (max delegation depth 2). Conversation history persists in
+Deno KV by `contextId`. Shared bearer-token auth on all A2A calls.
 
-**Tech Stack:** Deno 2.x, TypeScript, Hono (HTTP), `@std/dotenv`, `@anthropic-ai/sdk`, native `fetch` for Ollama, Deno KV.
+**Tech Stack:** Deno 2.x, TypeScript, Hono (HTTP), `@std/dotenv`,
+`@anthropic-ai/sdk`, native `fetch` for Ollama, Deno KV.
 
 **Spec:** `docs/superpowers/specs/2026-05-28-a2a-design.md`
 
@@ -50,6 +61,7 @@ tests/
 ## Task 1: Project bootstrap
 
 **Files:**
+
 - Create: `deno.json`
 - Create: `.env.example`
 - Create: `.gitignore`
@@ -99,8 +111,8 @@ deno.lock
 ```markdown
 # A2A Prototype
 
-Deno-based Agent-to-Agent (A2A) prototype: Claude delegates work to Ollama
-peers (and back) over HTTP, discovered via a local registry.
+Deno-based Agent-to-Agent (A2A) prototype: Claude delegates work to Ollama peers
+(and back) over HTTP, discovered via a local registry.
 
 ## Run
 
@@ -123,6 +135,7 @@ git commit -m "chore: project bootstrap (deno.json, env template, readme)"
 ## Task 2: Protocol types
 
 **Files:**
+
 - Create: `src/protocol/types.ts`
 - Test: `tests/protocol/types.test.ts`
 
@@ -131,7 +144,12 @@ git commit -m "chore: project bootstrap (deno.json, env template, readme)"
 ```ts
 // tests/protocol/types.test.ts
 import { assert, assertEquals } from "@std/assert";
-import { isAgentCard, isMessage, type AgentCard, type Message } from "../../src/protocol/types.ts";
+import {
+  type AgentCard,
+  isAgentCard,
+  isMessage,
+  type Message,
+} from "../../src/protocol/types.ts";
 
 Deno.test("isAgentCard accepts a valid card", () => {
   const card: AgentCard = {
@@ -168,8 +186,8 @@ Deno.test("isMessage rejects bad role", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `deno task test tests/protocol/types.test.ts`
-Expected: FAIL — module not found.
+Run: `deno task test tests/protocol/types.test.ts` Expected: FAIL — module not
+found.
 
 - [ ] **Step 3: Implement `src/protocol/types.ts`**
 
@@ -250,8 +268,7 @@ export function isMessage(v: unknown): v is Message {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `deno task test tests/protocol/types.test.ts`
-Expected: 4 passed.
+Run: `deno task test tests/protocol/types.test.ts` Expected: 4 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -265,6 +282,7 @@ git commit -m "feat(protocol): add A2A type definitions and guards"
 ## Task 3: Context store (Deno KV)
 
 **Files:**
+
 - Create: `src/store/context.ts`
 - Test: `tests/store/context.test.ts`
 
@@ -310,8 +328,8 @@ Deno.test("ContextStore.get returns [] for unknown id", async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `deno task test tests/store/context.test.ts`
-Expected: FAIL — module not found.
+Run: `deno task test tests/store/context.test.ts` Expected: FAIL — module not
+found.
 
 - [ ] **Step 3: Implement `src/store/context.ts`**
 
@@ -343,8 +361,7 @@ export class ContextStore {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `deno task test tests/store/context.test.ts`
-Expected: 3 passed.
+Run: `deno task test tests/store/context.test.ts` Expected: 3 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -358,6 +375,7 @@ git commit -m "feat(store): add Deno KV context store"
 ## Task 4: Config loader and role presets
 
 **Files:**
+
 - Create: `src/config.ts`
 - Create: `src/roles.config.ts`
 
@@ -384,7 +402,11 @@ export const roles: Record<string, RolePreset> = {
     systemPrompt:
       "You are a coordinator. When work would be cheaper or faster on a peer agent, call delegate_task. Otherwise answer directly. Stay concise.",
     skills: [
-      { id: "coordinate", name: "Coordinate", description: "Plans and delegates complex tasks" },
+      {
+        id: "coordinate",
+        name: "Coordinate",
+        description: "Plans and delegates complex tasks",
+      },
     ],
   },
   gemma3: {
@@ -393,7 +415,11 @@ export const roles: Record<string, RolePreset> = {
     description: "Fast local generalist (gemma3 via Ollama)",
     systemPrompt: "You are a fast helper. Answer concisely.",
     skills: [
-      { id: "general", name: "General", description: "Cheap general-purpose assistant" },
+      {
+        id: "general",
+        name: "General",
+        description: "Cheap general-purpose assistant",
+      },
     ],
   },
   gemma4: {
@@ -402,7 +428,11 @@ export const roles: Record<string, RolePreset> = {
     description: "Stronger local model for harder local work",
     systemPrompt: "You are a careful local model. Think before answering.",
     skills: [
-      { id: "reasoning", name: "Reasoning", description: "Local reasoning over text" },
+      {
+        id: "reasoning",
+        name: "Reasoning",
+        description: "Local reasoning over text",
+      },
     ],
   },
 };
@@ -412,7 +442,7 @@ export const roles: Record<string, RolePreset> = {
 
 ```ts
 import { load } from "@std/dotenv";
-import { roles, type RolePreset } from "./roles.config.ts";
+import { type RolePreset, roles } from "./roles.config.ts";
 
 export type AppConfig = {
   registryPort: number;
@@ -422,9 +452,9 @@ export type AppConfig = {
 };
 
 export type AgentSpec = {
-  name: string;       // identity (e.g. "gemma3")
+  name: string; // identity (e.g. "gemma3")
   preset: RolePreset; // role config
-  model: string;      // resolved model (preset.model or CLI override)
+  model: string; // resolved model (preset.model or CLI override)
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -440,12 +470,18 @@ export async function loadConfig(): Promise<AppConfig> {
 
 // Parse "sonnet,gemma3:llama3.1,code-reviewer" → AgentSpec[]
 export function parseAgentsFlag(raw: string): AgentSpec[] {
-  return raw.split(",").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
-    const [name, modelOverride] = entry.split(":");
-    const preset = roles[name];
-    if (!preset) throw new Error(`Unknown role: ${name}. Known: ${Object.keys(roles).join(", ")}`);
-    return { name, preset, model: modelOverride ?? preset.model };
-  });
+  return raw.split(",").map((entry) => entry.trim()).filter(Boolean).map(
+    (entry) => {
+      const [name, modelOverride] = entry.split(":");
+      const preset = roles[name];
+      if (!preset) {
+        throw new Error(
+          `Unknown role: ${name}. Known: ${Object.keys(roles).join(", ")}`,
+        );
+      }
+      return { name, preset, model: modelOverride ?? preset.model };
+    },
+  );
 }
 ```
 
@@ -461,6 +497,7 @@ git commit -m "feat(config): add env loader and role presets"
 ## Task 5: Registry server
 
 **Files:**
+
 - Create: `src/registry/server.ts`
 - Test: `tests/registry/registry.test.ts`
 
@@ -514,8 +551,8 @@ Deno.test("registry: 404 for unknown agent", async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `deno task test tests/registry/registry.test.ts`
-Expected: FAIL — module not found.
+Run: `deno task test tests/registry/registry.test.ts` Expected: FAIL — module
+not found.
 
 - [ ] **Step 3: Implement `src/registry/server.ts`**
 
@@ -566,8 +603,7 @@ export async function startRegistry(port: number): Promise<RegistryHandle> {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `deno task test tests/registry/registry.test.ts`
-Expected: 2 passed.
+Run: `deno task test tests/registry/registry.test.ts` Expected: 2 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -581,6 +617,7 @@ git commit -m "feat(registry): in-memory agent registry server"
 ## Task 6: Registry client
 
 **Files:**
+
 - Create: `src/registry/client.ts`
 
 - [ ] **Step 1: Implement `src/registry/client.ts`**
@@ -618,7 +655,9 @@ export class RegistryClient {
 
   async get(name: string): Promise<AgentCard | null> {
     try {
-      const res = await fetch(`${this.baseUrl}/agents/${encodeURIComponent(name)}`);
+      const res = await fetch(
+        `${this.baseUrl}/agents/${encodeURIComponent(name)}`,
+      );
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -640,6 +679,7 @@ git commit -m "feat(registry): registry HTTP client"
 ## Task 7: Protocol client (HTTP send / SSE stream)
 
 **Files:**
+
 - Create: `src/protocol/client.ts`
 
 - [ ] **Step 1: Implement `src/protocol/client.ts`**
@@ -648,9 +688,9 @@ git commit -m "feat(registry): registry HTTP client"
 import type { Message } from "./types.ts";
 
 export type SendOptions = {
-  url: string;             // target agent base URL
-  token: string;           // bearer
-  depth: number;           // current delegation depth (will be sent as x-depth)
+  url: string; // target agent base URL
+  token: string; // bearer
+  depth: number; // current delegation depth (will be sent as x-depth)
   message: Message;
 };
 
@@ -667,7 +707,9 @@ export async function sendMessage(opts: SendOptions): Promise<SendResult> {
     body: JSON.stringify({ message: opts.message }),
   });
   if (res.status === 429) throw new Error("max delegation depth reached");
-  if (!res.ok) throw new Error(`send failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`send failed: ${res.status} ${await res.text()}`);
+  }
   const json = await res.json();
   return { text: String(json.text ?? "") };
 }
@@ -678,7 +720,9 @@ export type StreamEvent =
   | { type: "error"; message: string }
   | { type: "done" };
 
-export async function* streamMessage(opts: SendOptions): AsyncGenerator<StreamEvent> {
+export async function* streamMessage(
+  opts: SendOptions,
+): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${opts.url}/message/stream`, {
     method: "POST",
     headers: {
@@ -733,6 +777,7 @@ git commit -m "feat(protocol): HTTP send + SSE stream client"
 ## Task 8: Base agent server (routes, auth, depth guard)
 
 **Files:**
+
 - Create: `src/agent/base.ts`
 - Test: `tests/agent/depth-guard.test.ts`
 - Test: `tests/agent/auth.test.ts`
@@ -746,7 +791,9 @@ import { startAgent } from "../../src/agent/base.ts";
 import type { AgentCard } from "../../src/protocol/types.ts";
 
 const card: AgentCard = {
-  name: "test", description: "t", version: "1.0.0",
+  name: "test",
+  description: "t",
+  version: "1.0.0",
   url: "http://localhost:0",
   skills: [{ id: "x", name: "x", description: "x" }],
   securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
@@ -758,13 +805,22 @@ Deno.test("base agent: x-depth >= 2 returns 429", async () => {
     card,
     bearerToken: "tok",
     handler: async () => ({ text: "ok" }),
-    streamHandler: async function* () { yield { type: "delta", text: "ok" }; yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "delta", text: "ok" };
+      yield { type: "done" };
+    },
   });
   const url = `http://localhost:${agent.port}/message/send`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer tok", "x-depth": "2" },
-    body: JSON.stringify({ message: { messageId: "1", role: "user", parts: [] } }),
+    headers: {
+      "content-type": "application/json",
+      authorization: "Bearer tok",
+      "x-depth": "2",
+    },
+    body: JSON.stringify({
+      message: { messageId: "1", role: "user", parts: [] },
+    }),
   });
   assertEquals(res.status, 429);
   await res.body?.cancel();
@@ -776,13 +832,25 @@ Deno.test("base agent: x-depth 0 and 1 allowed", async () => {
     card,
     bearerToken: "tok",
     handler: async () => ({ text: "ok" }),
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   for (const d of ["0", "1"]) {
     const res = await fetch(`http://localhost:${agent.port}/message/send`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: "Bearer tok", "x-depth": d },
-      body: JSON.stringify({ message: { messageId: "1", role: "user", parts: [{ type: "text", text: "hi" }] } }),
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer tok",
+        "x-depth": d,
+      },
+      body: JSON.stringify({
+        message: {
+          messageId: "1",
+          role: "user",
+          parts: [{ type: "text", text: "hi" }],
+        },
+      }),
     });
     assertEquals(res.status, 200, `depth ${d} should be allowed`);
     await res.body?.cancel();
@@ -800,19 +868,27 @@ import { startAgent } from "../../src/agent/base.ts";
 import type { AgentCard } from "../../src/protocol/types.ts";
 
 const card: AgentCard = {
-  name: "t", description: "t", version: "1.0.0", url: "http://localhost:0",
+  name: "t",
+  description: "t",
+  version: "1.0.0",
+  url: "http://localhost:0",
   skills: [{ id: "x", name: "x", description: "x" }],
   securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
   security: [{ bearer: [] }],
 };
 
-const body = JSON.stringify({ message: { messageId: "1", role: "user", parts: [] } });
+const body = JSON.stringify({
+  message: { messageId: "1", role: "user", parts: [] },
+});
 
 Deno.test("auth: missing token returns 401", async () => {
   const agent = await startAgent({
-    card, bearerToken: "secret",
+    card,
+    bearerToken: "secret",
     handler: async () => ({ text: "" }),
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   const res = await fetch(`http://localhost:${agent.port}/message/send`, {
     method: "POST",
@@ -826,13 +902,20 @@ Deno.test("auth: missing token returns 401", async () => {
 
 Deno.test("auth: wrong token returns 401", async () => {
   const agent = await startAgent({
-    card, bearerToken: "secret",
+    card,
+    bearerToken: "secret",
     handler: async () => ({ text: "" }),
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   const res = await fetch(`http://localhost:${agent.port}/message/send`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer nope", "x-depth": "0" },
+    headers: {
+      "content-type": "application/json",
+      authorization: "Bearer nope",
+      "x-depth": "0",
+    },
     body,
   });
   assertEquals(res.status, 401);
@@ -842,11 +925,16 @@ Deno.test("auth: wrong token returns 401", async () => {
 
 Deno.test("auth: agent card is public (no token required)", async () => {
   const agent = await startAgent({
-    card, bearerToken: "secret",
+    card,
+    bearerToken: "secret",
     handler: async () => ({ text: "" }),
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
-  const res = await fetch(`http://localhost:${agent.port}/.well-known/agent.json`);
+  const res = await fetch(
+    `http://localhost:${agent.port}/.well-known/agent.json`,
+  );
   assertEquals(res.status, 200);
   await res.json();
   await agent.shutdown();
@@ -855,8 +943,7 @@ Deno.test("auth: agent card is public (no token required)", async () => {
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `deno task test tests/agent/`
-Expected: FAIL — module not found.
+Run: `deno task test tests/agent/` Expected: FAIL — module not found.
 
 - [ ] **Step 4: Implement `src/agent/base.ts`**
 
@@ -924,7 +1011,9 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
         const write = (ev: StreamEvent) =>
           controller.enqueue(enc.encode(`data: ${JSON.stringify(ev)}\n\n`));
         try {
-          for await (const ev of cfg.streamHandler({ depth, message: body.message })) {
+          for await (
+            const ev of cfg.streamHandler({ depth, message: body.message })
+          ) {
             write(ev);
           }
         } catch (e) {
@@ -935,7 +1024,10 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
       },
     });
     return new Response(stream, {
-      headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      },
     });
   });
 
@@ -955,8 +1047,7 @@ export async function startAgent(cfg: AgentConfig): Promise<AgentHandle> {
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `deno task test tests/agent/`
-Expected: 5 passed.
+Run: `deno task test tests/agent/` Expected: 5 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -970,6 +1061,7 @@ git commit -m "feat(agent): base server with auth + depth guard + SSE"
 ## Task 9: Ollama backend handler
 
 **Files:**
+
 - Create: `src/agent/ollama.ts`
 - Test: `tests/agent/ollama.test.ts`
 
@@ -990,7 +1082,9 @@ function mockStore(): ContextStore {
       arr.push(m);
       data.set(id, arr);
     },
-    clear: async (id: string) => { data.delete(id); },
+    clear: async (id: string) => {
+      data.delete(id);
+    },
   } as unknown as ContextStore;
 }
 
@@ -999,7 +1093,9 @@ Deno.test("ollama handler: forwards prompt and stores history", async () => {
   globalThis.fetch = (async (_url, init) => {
     const body = JSON.parse(String((init as RequestInit)?.body ?? "{}"));
     assertEquals(body.model, "gemma3");
-    return new Response(JSON.stringify({ message: { content: "hi back" } }), { status: 200 });
+    return new Response(JSON.stringify({ message: { content: "hi back" } }), {
+      status: 200,
+    });
   }) as typeof fetch;
 
   const store = mockStore();
@@ -1012,7 +1108,12 @@ Deno.test("ollama handler: forwards prompt and stores history", async () => {
 
   const result = await handler({
     depth: 0,
-    message: { messageId: "1", role: "user", parts: [{ type: "text", text: "hi" }], contextId: "c1" },
+    message: {
+      messageId: "1",
+      role: "user",
+      parts: [{ type: "text", text: "hi" }],
+      contextId: "c1",
+    },
   });
 
   assertEquals(result.text, "hi back");
@@ -1023,8 +1124,8 @@ Deno.test("ollama handler: forwards prompt and stores history", async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `deno task test tests/agent/ollama.test.ts`
-Expected: FAIL — module not found.
+Run: `deno task test tests/agent/ollama.test.ts` Expected: FAIL — module not
+found.
 
 - [ ] **Step 3: Implement `src/agent/ollama.ts`**
 
@@ -1047,7 +1148,10 @@ function userText(ctx: AgentHandlerCtx): string {
     .join("\n");
 }
 
-function buildMessages(system: string, history: StoredMessage[]): StoredMessage[] {
+function buildMessages(
+  system: string,
+  history: StoredMessage[],
+): StoredMessage[] {
   return [{ role: "system", content: system }, ...history];
 }
 
@@ -1073,7 +1177,9 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
     return { text };
   }
 
-  async function* streamHandler(ctx: AgentHandlerCtx): AsyncGenerator<StreamEvent> {
+  async function* streamHandler(
+    ctx: AgentHandlerCtx,
+  ): AsyncGenerator<StreamEvent> {
     const contextId = ctx.message.contextId ?? crypto.randomUUID();
     const prompt = userText(ctx);
     await deps.store.append(contextId, { role: "user", content: prompt });
@@ -1123,8 +1229,7 @@ export function makeOllamaHandlers(deps: OllamaDeps) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `deno task test tests/agent/ollama.test.ts`
-Expected: 1 passed.
+Run: `deno task test tests/agent/ollama.test.ts` Expected: 1 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -1138,6 +1243,7 @@ git commit -m "feat(agent): ollama-backed handler with streaming"
 ## Task 10: Claude backend handler (with delegation tools)
 
 **Files:**
+
 - Create: `src/agent/claude.ts`
 
 - [ ] **Step 1: Implement `src/agent/claude.ts`**
@@ -1167,7 +1273,9 @@ function userText(ctx: AgentHandlerCtx): string {
     .join("\n");
 }
 
-function toAnthropic(history: StoredMessage[]): Array<{ role: "user" | "assistant"; content: string }> {
+function toAnthropic(
+  history: StoredMessage[],
+): Array<{ role: "user" | "assistant"; content: string }> {
   return history
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
@@ -1176,16 +1284,21 @@ function toAnthropic(history: StoredMessage[]): Array<{ role: "user" | "assistan
 const TOOLS = [
   {
     name: "list_agents",
-    description: "List peer agents available for delegation. Returns name, description, and skills for each.",
+    description:
+      "List peer agents available for delegation. Returns name, description, and skills for each.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "delegate_task",
-    description: "Delegate a task to a peer agent. Returns the peer's text response. Use when another agent is better suited (cheaper, faster, more specialised). Cannot be called recursively past depth 2.",
+    description:
+      "Delegate a task to a peer agent. Returns the peer's text response. Use when another agent is better suited (cheaper, faster, more specialised). Cannot be called recursively past depth 2.",
     input_schema: {
       type: "object" as const,
       properties: {
-        agent: { type: "string", description: "Target agent name as returned by list_agents" },
+        agent: {
+          type: "string",
+          description: "Target agent name as returned by list_agents",
+        },
         prompt: { type: "string", description: "What to ask the peer agent" },
       },
       required: ["agent", "prompt"],
@@ -1196,11 +1309,22 @@ const TOOLS = [
 export function makeClaudeHandlers(deps: ClaudeDeps) {
   const client = new Anthropic({ apiKey: deps.apiKey });
 
-  async function runTool(name: string, args: Record<string, unknown>, depth: number, contextId: string): Promise<string> {
+  async function runTool(
+    name: string,
+    args: Record<string, unknown>,
+    depth: number,
+    contextId: string,
+  ): Promise<string> {
     if (name === "list_agents") {
       const cards = await deps.registry.list();
       const peers = cards.filter((c) => c.name !== deps.selfName);
-      return JSON.stringify(peers.map((c) => ({ name: c.name, description: c.description, skills: c.skills })));
+      return JSON.stringify(
+        peers.map((c) => ({
+          name: c.name,
+          description: c.description,
+          skills: c.skills,
+        })),
+      );
     }
     if (name === "delegate_task") {
       const target = String(args.agent);
@@ -1245,9 +1369,16 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
         messages,
       });
 
-      const textBlocks = resp.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text);
-      const toolBlocks = resp.content.filter((b) => b.type === "tool_use") as Array<{
-        type: "tool_use"; id: string; name: string; input: Record<string, unknown>;
+      const textBlocks = resp.content.filter((b) => b.type === "text").map((
+        b,
+      ) => (b as { text: string }).text);
+      const toolBlocks = resp.content.filter((b) =>
+        b.type === "tool_use"
+      ) as Array<{
+        type: "tool_use";
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
       }>;
 
       if (textBlocks.length) finalText = textBlocks.join("\n");
@@ -1265,11 +1396,16 @@ export function makeClaudeHandlers(deps: ClaudeDeps) {
       messages.push({ role: "user", content: toolResults as never });
     }
 
-    await deps.store.append(contextId, { role: "assistant", content: finalText });
+    await deps.store.append(contextId, {
+      role: "assistant",
+      content: finalText,
+    });
     return { text: finalText };
   }
 
-  async function* streamHandler(ctx: AgentHandlerCtx): AsyncGenerator<StreamEvent> {
+  async function* streamHandler(
+    ctx: AgentHandlerCtx,
+  ): AsyncGenerator<StreamEvent> {
     // V1: stream only the final answer. Tool turns happen behind the scenes.
     const result = await handler(ctx);
     // chunk by ~40 chars for visible streaming feel
@@ -1296,6 +1432,7 @@ git commit -m "feat(agent): Claude backend with list_agents + delegate_task tool
 ## Task 11: REPL
 
 **Files:**
+
 - Create: `src/repl.ts`
 
 - [ ] **Step 1: Implement `src/repl.ts`**
@@ -1326,7 +1463,9 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
 
     const match = line.match(/^@(\S+)\s+(.+)$/);
     if (!match) {
-      console.log(`(use @<agent> <prompt>; known: ${[...deps.agents.keys()].join(", ")})`);
+      console.log(
+        `(use @<agent> <prompt>; known: ${[...deps.agents.keys()].join(", ")})`,
+      );
       Deno.stdout.writeSync(new TextEncoder().encode(PROMPT));
       continue;
     }
@@ -1341,20 +1480,23 @@ export async function runRepl(deps: ReplDeps): Promise<void> {
     const enc = new TextEncoder();
     Deno.stdout.writeSync(enc.encode(`[${name}] `));
     try {
-      for await (const ev of streamMessage({
-        url: card.url,
-        token: deps.bearerToken,
-        depth: 0,
-        message: {
-          messageId: crypto.randomUUID(),
-          role: "user",
-          parts: [{ type: "text", text: prompt }],
-          contextId,
-        },
-      })) {
+      for await (
+        const ev of streamMessage({
+          url: card.url,
+          token: deps.bearerToken,
+          depth: 0,
+          message: {
+            messageId: crypto.randomUUID(),
+            role: "user",
+            parts: [{ type: "text", text: prompt }],
+            contextId,
+          },
+        })
+      ) {
         if (ev.type === "delta") Deno.stdout.writeSync(enc.encode(ev.text));
-        else if (ev.type === "error") Deno.stdout.writeSync(enc.encode(`\n[error] ${ev.message}`));
-        else if (ev.type === "done") break;
+        else if (ev.type === "error") {
+          Deno.stdout.writeSync(enc.encode(`\n[error] ${ev.message}`));
+        } else if (ev.type === "done") break;
       }
     } catch (e) {
       Deno.stdout.writeSync(enc.encode(`\n[error] ${(e as Error).message}`));
@@ -1376,24 +1518,30 @@ git commit -m "feat(repl): stdin loop with @mention routing and live SSE"
 ## Task 12: Orchestrator
 
 **Files:**
+
 - Create: `src/orchestrator.ts`
 
 - [ ] **Step 1: Implement `src/orchestrator.ts`**
 
 ```ts
-import { type AppConfig, type AgentSpec } from "./config.ts";
-import { startRegistry, type RegistryHandle } from "./registry/server.ts";
+import { type AgentSpec, type AppConfig } from "./config.ts";
+import { type RegistryHandle, startRegistry } from "./registry/server.ts";
 import { RegistryClient } from "./registry/client.ts";
-import { startAgent, type AgentHandle } from "./agent/base.ts";
+import { type AgentHandle, startAgent } from "./agent/base.ts";
 import { makeOllamaHandlers } from "./agent/ollama.ts";
 import { makeClaudeHandlers } from "./agent/claude.ts";
 import { ContextStore } from "./store/context.ts";
 import { runRepl } from "./repl.ts";
 import type { AgentCard } from "./protocol/types.ts";
 
-export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promise<void> {
+export async function runOrchestrator(
+  cfg: AppConfig,
+  specs: AgentSpec[],
+): Promise<void> {
   const registry: RegistryHandle = await startRegistry(cfg.registryPort);
-  const registryClient = new RegistryClient(`http://localhost:${registry.port}`);
+  const registryClient = new RegistryClient(
+    `http://localhost:${registry.port}`,
+  );
   const kv = await Deno.openKv();
   const store = new ContextStore(kv);
 
@@ -1416,20 +1564,20 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
 
       const handlers = spec.preset.backend === "claude"
         ? makeClaudeHandlers({
-            model: spec.model,
-            systemPrompt: spec.preset.systemPrompt,
-            apiKey: cfg.anthropicApiKey,
-            store,
-            registry: registryClient,
-            bearerToken: cfg.bearerToken,
-            selfName: spec.name,
-          })
+          model: spec.model,
+          systemPrompt: spec.preset.systemPrompt,
+          apiKey: cfg.anthropicApiKey,
+          store,
+          registry: registryClient,
+          bearerToken: cfg.bearerToken,
+          selfName: spec.name,
+        })
         : makeOllamaHandlers({
-            model: spec.model,
-            systemPrompt: spec.preset.systemPrompt,
-            baseUrl: cfg.ollamaBaseUrl,
-            store,
-          });
+          model: spec.model,
+          systemPrompt: spec.preset.systemPrompt,
+          baseUrl: cfg.ollamaBaseUrl,
+          store,
+        });
 
       const handle = await startAgent({
         card: baseCard,
@@ -1449,10 +1597,16 @@ export async function runOrchestrator(cfg: AppConfig, specs: AgentSpec[]): Promi
   const shutdown = async () => {
     console.log("\nshutting down...");
     for (const h of handles) {
-      try { await registryClient.deregister(h.card.name); } catch { /* ignore */ }
-      try { await h.shutdown(); } catch { /* ignore */ }
+      try {
+        await registryClient.deregister(h.card.name);
+      } catch { /* ignore */ }
+      try {
+        await h.shutdown();
+      } catch { /* ignore */ }
     }
-    try { await registry.shutdown(); } catch { /* ignore */ }
+    try {
+      await registry.shutdown();
+    } catch { /* ignore */ }
     kv.close();
     Deno.exit(0);
   };
@@ -1475,6 +1629,7 @@ git commit -m "feat(orchestrator): boot registry + agents + REPL"
 ## Task 13: CLI entry point
 
 **Files:**
+
 - Create: `src/main.ts`
 
 - [ ] **Step 1: Implement `src/main.ts`**
@@ -1496,7 +1651,9 @@ const cfg = await loadConfig();
 const specs = parseAgentsFlag(getAgentsFlag(Deno.args));
 
 if (specs.some((s) => s.preset.backend === "claude") && !cfg.anthropicApiKey) {
-  console.error("ANTHROPIC_API_KEY is required for Claude agents. Set it in .env");
+  console.error(
+    "ANTHROPIC_API_KEY is required for Claude agents. Set it in .env",
+  );
   Deno.exit(1);
 }
 
@@ -1515,6 +1672,7 @@ git commit -m "feat(cli): main entry point"
 ## Task 14: End-to-end delegation test
 
 **Files:**
+
 - Test: `tests/e2e/delegation.test.ts`
 
 - [ ] **Step 1: Write the e2e test**
@@ -1530,7 +1688,9 @@ import type { AgentCard } from "../../src/protocol/types.ts";
 
 function card(name: string): AgentCard {
   return {
-    name, description: "t", version: "1.0.0",
+    name,
+    description: "t",
+    version: "1.0.0",
     url: "http://localhost:0",
     skills: [{ id: "x", name: "x", description: "x" }],
     securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
@@ -1553,7 +1713,9 @@ Deno.test("e2e: agent A delegates to agent B and gets a result", async () => {
       const text = ctx.message.parts.find((p) => p.type === "text")?.text ?? "";
       return { text: `B-echo:${text}` };
     },
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   await regClient.register(b.card);
 
@@ -1568,11 +1730,17 @@ Deno.test("e2e: agent A delegates to agent B and gets a result", async () => {
         url: peer!.url,
         token,
         depth: ctx.depth + 1,
-        message: { messageId: "m2", role: "agent", parts: [{ type: "text", text: "hello-from-A" }] },
+        message: {
+          messageId: "m2",
+          role: "agent",
+          parts: [{ type: "text", text: "hello-from-A" }],
+        },
       });
       return { text: `A-wraps:${res.text}` };
     },
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   await regClient.register(a.card);
 
@@ -1580,7 +1748,11 @@ Deno.test("e2e: agent A delegates to agent B and gets a result", async () => {
     url: a.card.url,
     token,
     depth: 0,
-    message: { messageId: "m1", role: "user", parts: [{ type: "text", text: "hi" }] },
+    message: {
+      messageId: "m1",
+      role: "user",
+      parts: [{ type: "text", text: "hi" }],
+    },
   });
 
   assertEquals(result.text, "A-wraps:B-echo:hello-from-A");
@@ -1596,7 +1768,9 @@ Deno.test("e2e: depth 2 rejection", async () => {
     card: card("bravo"),
     bearerToken: "tok",
     handler: async () => ({ text: "ok" }),
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
 
   let threw = false;
@@ -1605,7 +1779,11 @@ Deno.test("e2e: depth 2 rejection", async () => {
       url: b.card.url,
       token: "tok",
       depth: 2,
-      message: { messageId: "m", role: "user", parts: [{ type: "text", text: "x" }] },
+      message: {
+        messageId: "m",
+        role: "user",
+        parts: [{ type: "text", text: "x" }],
+      },
     });
   } catch (e) {
     threw = (e as Error).message.includes("max delegation depth");
@@ -1617,8 +1795,7 @@ Deno.test("e2e: depth 2 rejection", async () => {
 
 - [ ] **Step 2: Run test to verify it passes**
 
-Run: `deno task test tests/e2e/delegation.test.ts`
-Expected: 2 passed.
+Run: `deno task test tests/e2e/delegation.test.ts` Expected: 2 passed.
 
 - [ ] **Step 3: Commit**
 
@@ -1653,6 +1830,7 @@ deno task start --agents="sonnet,gemma3"
 ```
 
 Expected output:
+
 ```
 [registry]   localhost:7890
 [sonnet]     http://localhost:<port>  (claude-sonnet-4-6)
@@ -1674,11 +1852,13 @@ Expected: streamed tokens forming a short greeting, then a new prompt.
 > @sonnet ask gemma3 what 2+2 is, then explain why
 ```
 
-Expected: sonnet calls `delegate_task("gemma3", "what is 2+2?")`, gets `"4"` back, then responds to the user. Watch logs for the delegate_task tool call.
+Expected: sonnet calls `delegate_task("gemma3", "what is 2+2?")`, gets `"4"`
+back, then responds to the user. Watch logs for the delegate_task tool call.
 
 - [ ] **Step 6: Verify depth guard**
 
 In another terminal:
+
 ```bash
 curl -X POST http://localhost:<sonnet-port>/message/send \
   -H "authorization: Bearer $(grep AGENT_BEARER_TOKEN .env | cut -d= -f2)" \
@@ -1691,13 +1871,22 @@ Expected: HTTP 429.
 
 - [ ] **Step 7: Verify registry survives without orchestrator-managed agents**
 
-Kill the orchestrator (`ctrl-c`), restart with just `--agents="gemma3"`. Verify only gemma3 listed in `curl localhost:7890/agents`.
+Kill the orchestrator (`ctrl-c`), restart with just `--agents="gemma3"`. Verify
+only gemma3 listed in `curl localhost:7890/agents`.
 
 ---
 
 ## Self-review notes
 
-- All spec sections covered: registry (Task 5/6), depth guard (Task 8/14), auth (Task 8), Ollama backend (Task 9), Claude backend with delegation tools (Task 10), REPL with @mention + SSE (Task 11), orchestrator boot/shutdown (Task 12), dynamic ports (port 0 in startAgent + startRegistry), Deno KV context (Task 3/9/10), shared bearer token (Task 8/14), roles config with model override (Task 4).
-- Standalone-agent CLI (`start:agent`) deliberately deferred per spec's "Open Questions".
-- Streaming for Claude is "wait then chunk" rather than true token-by-token — matches spec's V1 decision.
-- Test fixtures use mocked Anthropic/Ollama. Real-API verification lives in Task 15 manual smoke.
+- All spec sections covered: registry (Task 5/6), depth guard (Task 8/14), auth
+  (Task 8), Ollama backend (Task 9), Claude backend with delegation tools (Task
+  10), REPL with @mention + SSE (Task 11), orchestrator boot/shutdown (Task 12),
+  dynamic ports (port 0 in startAgent + startRegistry), Deno KV context (Task
+  3/9/10), shared bearer token (Task 8/14), roles config with model override
+  (Task 4).
+- Standalone-agent CLI (`start:agent`) deliberately deferred per spec's "Open
+  Questions".
+- Streaming for Claude is "wait then chunk" rather than true token-by-token —
+  matches spec's V1 decision.
+- Test fixtures use mocked Anthropic/Ollama. Real-API verification lives in Task
+  15 manual smoke.

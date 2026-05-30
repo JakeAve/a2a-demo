@@ -9,8 +9,13 @@ Deno.test("POST /ingest persists and GET /api/sessions returns it", async () => 
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      sessionId: "s1", requestId: "r1", ts: 1, agent: "REPL", depth: 0,
-      type: "request.started", data: { target: "coordinator", prompt: "hi" },
+      sessionId: "s1",
+      requestId: "r1",
+      ts: 1,
+      agent: "REPL",
+      depth: 0,
+      type: "request.started",
+      data: { target: "coordinator", prompt: "hi" },
     }),
   });
   assertEquals(post.status, 200);
@@ -43,14 +48,22 @@ Deno.test("POST /ingest rejects a malformed envelope", async () => {
 Deno.test("GET /stream delivers a posted event to a subscriber", async () => {
   const kv = await Deno.openKv(":memory:");
   const mon = await startMonitor({ kv, port: 0, token: "" });
-  const res = await fetch(`${mon.url}/stream?session=s1`, { headers: { accept: "text/event-stream" } });
+  const res = await fetch(`${mon.url}/stream?session=s1`, {
+    headers: { accept: "text/event-stream" },
+  });
   const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
 
   await fetch(`${mon.url}/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      sessionId: "s1", requestId: "r1", ts: 1, agent: "a", depth: 0, type: "turn.started", data: {},
+      sessionId: "s1",
+      requestId: "r1",
+      ts: 1,
+      agent: "a",
+      depth: 0,
+      type: "turn.started",
+      data: {},
     }),
   });
 

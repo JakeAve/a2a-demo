@@ -1,10 +1,9 @@
 # A2A Prototype
 
-Deno-based Agent-to-Agent (A2A) prototype: any Claude- or Ollama-backed
-agent can delegate work to peers over HTTP, discovered via a local
-registry. Each agent runs its own HTTP server, speaks the A2A wire
-protocol (JSON-RPC-ish over HTTP + SSE), and authenticates with a
-shared bearer token.
+Deno-based Agent-to-Agent (A2A) prototype: any Claude- or Ollama-backed agent
+can delegate work to peers over HTTP, discovered via a local registry. Each
+agent runs its own HTTP server, speaks the A2A wire protocol (JSON-RPC-ish over
+HTTP + SSE), and authenticates with a shared bearer token.
 
 ## Run
 
@@ -31,13 +30,13 @@ It points git at `.githooks/` (via `core.hooksPath`) and marks the hooks
 executable. The setting is local to your clone (not checked in), so each
 contributor runs it once.
 
-| Task | Runs |
-|---|---|
-| `deno task check` | `deno fmt --check`, `deno lint`, and `deno check` |
-| `deno task test` | full test suite (unit + e2e) |
-| `deno task test:unit` | unit tests only (excludes `tests/e2e/`, the `*e2e*` files) |
-| `deno task pre-commit` | `check` + unit tests — runs on every commit |
-| `deno task pre-push` | `check` + full test suite — runs on every push |
+| Task                   | Runs                                                       |
+| ---------------------- | ---------------------------------------------------------- |
+| `deno task check`      | `deno fmt --check`, `deno lint`, and `deno check`          |
+| `deno task test`       | full test suite (unit + e2e)                               |
+| `deno task test:unit`  | unit tests only (excludes `tests/e2e/`, the `*e2e*` files) |
+| `deno task pre-commit` | `check` + unit tests — runs on every commit                |
+| `deno task pre-push`   | `check` + full test suite — runs on every push             |
 
 `pre-commit` stays fast by skipping the network/Ollama-dependent e2e tests;
 those run at `pre-push`. Bypass a hook with `--no-verify` when you need to.
@@ -47,24 +46,24 @@ those run at `pre-push`. Bypass a hook with `--no-verify` when you need to.
 The roster lives in **`agents.default.json`** (committed) — a JSON object
 mapping role name to preset. To customize locally, create **`agents.json`**
 (gitignored); when present it **fully replaces** the default roster. The shape
-of both files is described by `agents.schema.json` (referenced via `$schema`
-for editor autocomplete).
+of both files is described by `agents.schema.json` (referenced via `$schema` for
+editor autocomplete).
 
-Agent names are identities, deliberately **decoupled from the model** that
-backs them — so a role can swap models without breaking how peers address it.
+Agent names are identities, deliberately **decoupled from the model** that backs
+them — so a role can swap models without breaking how peers address it.
 
-| Role | Backend | Tools | Purpose |
-|---|---|---|---|
-| `coordinator` | Claude API (`claude-haiku-4-5`) | yes | Answers simple requests; delegates the rest to peers |
-| `researcher` | Claude API (`claude-haiku-4-5`) | yes + web_search | Decomposes questions, delegates, synthesizes |
-| `worker` | Ollama (`gemma4:e4b`) | yes | Local worker: summarize, translate, review, reason |
+| Role          | Backend                         | Tools            | Purpose                                              |
+| ------------- | ------------------------------- | ---------------- | ---------------------------------------------------- |
+| `coordinator` | Claude API (`claude-haiku-4-5`) | yes              | Answers simple requests; delegates the rest to peers |
+| `researcher`  | Claude API (`claude-haiku-4-5`) | yes + web_search | Decomposes questions, delegates, synthesizes         |
+| `worker`      | Ollama (`gemma4:e4b`)           | yes              | Local worker: summarize, translate, review, reason   |
 
 **Add or change agents:** create `agents.json` (it fully replaces the default
 roster) with one entry per role matching the shape in `agents.schema.json`.
 Restart. No code changes needed.
 
-**Override a model at the CLI:** `--agents="coordinator,worker:gemma3:1b"`
-runs the `worker` role with the `gemma3:1b` tag.
+**Override a model at the CLI:** `--agents="coordinator,worker:gemma3:1b"` runs
+the `worker` role with the `gemma3:1b` tag.
 
 ## Architecture
 
@@ -78,9 +77,9 @@ deno task start --agents="coordinator,researcher,worker"
   [REPL]          stdin/stdout            (@mentions, live SSE)
 ```
 
-Each agent registers its Agent Card with the registry on boot. Peers
-discover each other via `GET /agents`. Delegations are bearer-token
-authenticated HTTP calls between agents.
+Each agent registers its Agent Card with the registry on boot. Peers discover
+each other via `GET /agents`. Delegations are bearer-token authenticated HTTP
+calls between agents.
 
 ### Delegation threads
 
@@ -90,8 +89,8 @@ A tool-capable agent has five tools for managing sub-conversations:
 - `list_my_threads()` — see active sub-conversations
 - `delegate_start(agent, prompt, title?)` — open a new thread, returns
   `{ threadId, text }`
-- `delegate_continue(threadId, prompt)` — continue an existing thread
-  (peer sees prior turns)
+- `delegate_continue(threadId, prompt)` — continue an existing thread (peer sees
+  prior turns)
 - `reset_thread(threadId)` — drop a finished thread
 
 Threads are scoped to the parent's contextId, persisted in Deno KV.
@@ -102,22 +101,24 @@ Cross-conversation thread access is rejected.
 An agent in the orchestrator can launch new peers on demand:
 
 - `list_roles()` — see available role presets
-- `spawn_agent(role, name?, model?)` — boot a new agent as its own
-  subprocess (Deno.Command + `src/agent-entry.ts`). Returns once the
-  new peer has registered.
+- `spawn_agent(role, name?, model?)` — boot a new agent as its own subprocess
+  (Deno.Command + `src/agent-entry.ts`). Returns once the new peer has
+  registered.
 
-Spawned agents have their own KV (isolated history). The orchestrator
-kills them on shutdown. Standalone agents (no orchestrator) do not get
-spawn capability — that authority lives only with the orchestrator.
+Spawned agents have their own KV (isolated history). The orchestrator kills them
+on shutdown. Standalone agents (no orchestrator) do not get spawn capability —
+that authority lives only with the orchestrator.
 
 ### Depth guard
 
 Each `delegate_*` call increments an `x-depth` header. A request whose depth
 reaches the cap is rejected with HTTP 429. The cap is **pegged to the current
 registered-agent count** (floored at 2), so a bigger swarm can fan out deeper —
-e.g. with `coordinator, researcher, worker` registered, `REPL → coordinator →
-researcher → worker` is allowed. Set `A2A_MAX_DEPTH` to a fixed number to
-override (e.g. `A2A_MAX_DEPTH=2` restores the original `REPL → A → B` budget).
+e.g. with `coordinator, researcher, worker` registered,
+`REPL → coordinator →
+researcher → worker` is allowed. Set `A2A_MAX_DEPTH` to a
+fixed number to override (e.g. `A2A_MAX_DEPTH=2` restores the original
+`REPL → A → B` budget).
 
 Note: a delegating role (e.g. `researcher`, whose job is to decompose and
 delegate) only fans out usefully when it sits high enough in the tree to have
@@ -130,31 +131,31 @@ Spin up an agent in another terminal — it joins the same registry:
 
     deno task start:agent --role=worker --name=remote --registry=http://localhost:7890
 
-Useful for running peers on different machines (subject to network
-config — see `TODO.md`'s multi-machine entry).
+Useful for running peers on different machines (subject to network config — see
+`TODO.md`'s multi-machine entry).
 
 ## Scripts
 
-- `scripts/smoke.ts` — full Tier C round-trip (Claude + Ollama,
-  delegate_start + delegate_continue + spawn_agent)
+- `scripts/smoke.ts` — full Tier C round-trip (Claude + Ollama, delegate_start +
+  delegate_continue + spawn_agent)
 - `scripts/smoke-gemma-tools.ts` — tool-capable `captain` delegating to a
   passive `helper` (both Ollama `worker`), no Claude in the loop
-- `scripts/smoke-streaming-tools.ts` — verify streaming token output
-  through the tool loop
-- `scripts/kv-dump.ts` — dump every thread + conversation history in
-  the local Deno KV
+- `scripts/smoke-streaming-tools.ts` — verify streaming token output through the
+  tool loop
+- `scripts/kv-dump.ts` — dump every thread + conversation history in the local
+  Deno KV
 
 Run any of them with:
 
     REGISTRY_PORT=0 deno run --env-file=.env --allow-net --allow-env --allow-read --allow-run --unstable-kv scripts/<file>.ts
 
-(The `REGISTRY_PORT=0` lets them use an OS-assigned port so they don't
-conflict with a running orchestrator on 7890.)
+(The `REGISTRY_PORT=0` lets them use an OS-assigned port so they don't conflict
+with a running orchestrator on 7890.)
 
 ## Web UI monitor (optional)
 
-Visualize a run as a swimlane diagram. The monitor is a standalone service;
-the app works exactly the same with it off.
+Visualize a run as a swimlane diagram. The monitor is a standalone service; the
+app works exactly the same with it off.
 
 ```
 # terminal 1 — start the monitor
@@ -211,41 +212,41 @@ final text (no token streaming over MCP).
 
 `.env` (see `.env.example`):
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `REGISTRY_PORT` | `7890` | Registry's fixed port |
-| `ANTHROPIC_API_KEY` | — | Required for any Claude-backed agent |
-| `AGENT_BEARER_TOKEN` | `local-dev-secret` | Shared secret on all A2A calls |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Where to find Ollama |
-| `A2A_MONITOR_URL` | *(unset — monitor disabled)* | Point agents at a running monitor for swimlane tracing |
+| Variable             | Default                      | Purpose                                                |
+| -------------------- | ---------------------------- | ------------------------------------------------------ |
+| `REGISTRY_PORT`      | `7890`                       | Registry's fixed port                                  |
+| `ANTHROPIC_API_KEY`  | —                            | Required for any Claude-backed agent                   |
+| `AGENT_BEARER_TOKEN` | `local-dev-secret`           | Shared secret on all A2A calls                         |
+| `OLLAMA_BASE_URL`    | `http://localhost:11434`     | Where to find Ollama                                   |
+| `A2A_MONITOR_URL`    | _(unset — monitor disabled)_ | Point agents at a running monitor for swimlane tracing |
 
 ## Design + roadmap
 
 - `docs/superpowers/specs/2026-05-28-a2a-design.md` — full design spec
   (architecture, protocol, security, threading, spawning, etc.)
-- `docs/superpowers/plans/2026-05-28-a2a-prototype.md` — implementation
-  plan (15 tasks, all done)
-- `TODO.md` — follow-ups: thread-browser CLI, multi-machine,
-  agent-card consolidation, others
+- `docs/superpowers/plans/2026-05-28-a2a-prototype.md` — implementation plan (15
+  tasks, all done)
+- `TODO.md` — follow-ups: thread-browser CLI, multi-machine, agent-card
+  consolidation, others
 
 ## Claude backends & cost
 
 Two Claude backends exist, chosen per role via the `backend` field:
 
-- **`claude`** — direct Anthropic Messages API with `ANTHROPIC_API_KEY`. Best for
-  high-traffic, large-API-key usage.
+- **`claude`** — direct Anthropic Messages API with `ANTHROPIC_API_KEY`. Best
+  for high-traffic, large-API-key usage.
 - **`claude-code`** — runs through the Claude Agent SDK. Prefers
   `CLAUDE_CODE_OAUTH_TOKEN` (a subscription token from `claude setup-token`) and
   falls back to `ANTHROPIC_API_KEY`. Lets a user without an API key run Claude
   agents on their Pro/Max/Team/Enterprise subscription.
 
 **Cost note (effective June 15, 2026):** Agent SDK usage — including these
-`claude-code` agents — draws from a separate monthly Agent SDK credit
-(Pro $20 / Max 5x $100 / Max 20x $200 / Team & Enterprise per plan), not your
-interactive Claude limits. Once that credit is spent, usage either bills at
-standard API rates (if usage credits are enabled) or stops until the credit
-refreshes. **When driving this orchestrator from Claude Code under a
-subscription, prefer Ollama-backed peers for delegated work and reserve
-`claude-code` agents for tasks that genuinely need them** — every `claude-code`
-agent you spawn draws from that monthly credit. See
+`claude-code` agents — draws from a separate monthly Agent SDK credit (Pro $20 /
+Max 5x $100 / Max 20x $200 / Team & Enterprise per plan), not your interactive
+Claude limits. Once that credit is spent, usage either bills at standard API
+rates (if usage credits are enabled) or stops until the credit refreshes. **When
+driving this orchestrator from Claude Code under a subscription, prefer
+Ollama-backed peers for delegated work and reserve `claude-code` agents for
+tasks that genuinely need them** — every `claude-code` agent you spawn draws
+from that monthly credit. See
 `docs/superpowers/specs/2026-05-28-claude-code-backend-design.md` for details.

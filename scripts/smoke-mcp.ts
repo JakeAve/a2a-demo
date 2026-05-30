@@ -19,11 +19,16 @@ const transport = new StdioClientTransport({
   ],
 });
 
-const client = new Client({ name: "smoke-mcp", version: "1.0.0" }, { capabilities: {} });
+const client = new Client({ name: "smoke-mcp", version: "1.0.0" }, {
+  capabilities: {},
+});
 await client.connect(transport);
 
 const tools = await client.listTools();
-console.log("tools:", tools.tools.map((t: { name: string }) => t.name).join(", "));
+console.log(
+  "tools:",
+  tools.tools.map((t: { name: string }) => t.name).join(", "),
+);
 if (!tools.tools.some((t: { name: string }) => t.name === "delegate_start")) {
   console.error("FAIL: delegate_start not advertised");
   await client.close();

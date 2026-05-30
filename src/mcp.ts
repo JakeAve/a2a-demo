@@ -14,7 +14,12 @@
 //      can't reach our stdout either (their stderr still surfaces real errors).
 console.log = (...args: unknown[]) => console.error(...args);
 
-import { assertBackendCredentials, getAgentsFlag, loadConfig, parseAgentsFlag } from "./config.ts";
+import {
+  assertBackendCredentials,
+  getAgentsFlag,
+  loadConfig,
+  parseAgentsFlag,
+} from "./config.ts";
 import { loadRoles } from "./roles.ts";
 import { setupOrchestrator } from "./orchestrator.ts";
 import { runMcpServer } from "./mcp-server.ts";
@@ -36,11 +41,17 @@ let shuttingDown = false;
 const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
-  try { await ctx.shutdown(); } catch { /* ignore */ }
+  try {
+    await ctx.shutdown();
+  } catch { /* ignore */ }
   Deno.exit(0);
 };
-Deno.addSignalListener("SIGINT", () => { void shutdown(); });
-Deno.addSignalListener("SIGTERM", () => { void shutdown(); });
+Deno.addSignalListener("SIGINT", () => {
+  void shutdown();
+});
+Deno.addSignalListener("SIGTERM", () => {
+  void shutdown();
+});
 
 console.error("[mcp] A2A MCP server ready on stdio");
 await runMcpServer(ctx); // resolves when the client disconnects

@@ -18,9 +18,9 @@ export type AppConfig = {
 };
 
 export type AgentSpec = {
-  name: string;       // identity (e.g. "worker")
+  name: string; // identity (e.g. "worker")
   preset: RolePreset; // role config
-  model: string;      // resolved model (preset.model or CLI override)
+  model: string; // resolved model (preset.model or CLI override)
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -44,12 +44,20 @@ export async function loadConfig(): Promise<AppConfig> {
 }
 
 // Throws with an actionable message if any spec's backend lacks its credential.
-export function assertBackendCredentials(specs: AgentSpec[], cfg: AppConfig): void {
+export function assertBackendCredentials(
+  specs: AgentSpec[],
+  cfg: AppConfig,
+): void {
   const backends = new Set(specs.map((s) => s.preset.backend));
   if (backends.has("claude") && !cfg.anthropicApiKey) {
-    throw new Error("ANTHROPIC_API_KEY is required for claude agents. Set it in .env");
+    throw new Error(
+      "ANTHROPIC_API_KEY is required for claude agents. Set it in .env",
+    );
   }
-  if (backends.has("claude-code") && !cfg.claudeCodeOauthToken && !cfg.anthropicApiKey) {
+  if (
+    backends.has("claude-code") && !cfg.claudeCodeOauthToken &&
+    !cfg.anthropicApiKey
+  ) {
     throw new Error(
       "claude-code agents require CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY. Set one in .env",
     );
@@ -72,12 +80,18 @@ export function parseAgentsFlag(
   raw: string,
   roles: Record<string, RolePreset>,
 ): AgentSpec[] {
-  return raw.split(",").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
-    const colon = entry.indexOf(":");
-    const name = colon === -1 ? entry : entry.slice(0, colon);
-    const modelOverride = colon === -1 ? undefined : entry.slice(colon + 1);
-    const preset = roles[name];
-    if (!preset) throw new Error(`Unknown role: ${name}. Known: ${Object.keys(roles).join(", ")}`);
-    return { name, preset, model: modelOverride ?? preset.model };
-  });
+  return raw.split(",").map((entry) => entry.trim()).filter(Boolean).map(
+    (entry) => {
+      const colon = entry.indexOf(":");
+      const name = colon === -1 ? entry : entry.slice(0, colon);
+      const modelOverride = colon === -1 ? undefined : entry.slice(colon + 1);
+      const preset = roles[name];
+      if (!preset) {
+        throw new Error(
+          `Unknown role: ${name}. Known: ${Object.keys(roles).join(", ")}`,
+        );
+      }
+      return { name, preset, model: modelOverride ?? preset.model };
+    },
+  );
 }

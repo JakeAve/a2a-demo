@@ -25,19 +25,25 @@ function getFlag(args: string[], name: string): string | undefined {
     if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3);
   }
   const i = args.indexOf(`--${name}`);
-  if (i !== -1 && args[i + 1] && !args[i + 1].startsWith("--")) return args[i + 1];
+  if (i !== -1 && args[i + 1] && !args[i + 1].startsWith("--")) {
+    return args[i + 1];
+  }
   return undefined;
 }
 
 const role = getFlag(Deno.args, "role");
 if (!role) {
-  console.error("usage: deno task start:agent --role=<name> [--name=<custom>] [--registry=<url>]");
+  console.error(
+    "usage: deno task start:agent --role=<name> [--name=<custom>] [--registry=<url>]",
+  );
   Deno.exit(2);
 }
 const roles = await loadRoles();
 const preset = roles[role];
 if (!preset) {
-  console.error(`unknown role "${role}". Known: ${Object.keys(roles).join(", ")}`);
+  console.error(
+    `unknown role "${role}". Known: ${Object.keys(roles).join(", ")}`,
+  );
   Deno.exit(2);
 }
 
@@ -50,9 +56,12 @@ const registryUrl = getFlag(Deno.args, "registry") ??
   Deno.env.get("REGISTRY_URL") ??
   `http://localhost:${cfg.registryPort}`;
 
-const brokerUrl = getFlag(Deno.args, "broker") ?? Deno.env.get("ROOM_BROKER_URL");
+const brokerUrl = getFlag(Deno.args, "broker") ??
+  Deno.env.get("ROOM_BROKER_URL");
 const roomTurn: RoomTurnState = { active: null };
-const rooms = brokerUrl ? new RoomBrokerClient(brokerUrl, cfg.bearerToken) : undefined;
+const rooms = brokerUrl
+  ? new RoomBrokerClient(brokerUrl, cfg.bearerToken)
+  : undefined;
 
 try {
   assertBackendCredentials([{ name: agentName, preset, model }], cfg);
@@ -98,8 +107,12 @@ const handlers = await buildHandlers({
 
 const onInbox = rooms
   ? makeRoomTurnProcessor({
-      selfName: agentName, handler: handlers.handler, rooms, roomTurn, store,
-    })
+    selfName: agentName,
+    handler: handlers.handler,
+    rooms,
+    roomTurn,
+    store,
+  })
   : undefined;
 
 const handle = await startAgent({
@@ -112,15 +125,21 @@ const handle = await startAgent({
   onInbox,
 });
 await registry.register(handle.card);
-console.log(`[${agentName}] ${handle.card.url} (${model})  registered with ${registryUrl}`);
+console.log(
+  `[${agentName}] ${handle.card.url} (${model})  registered with ${registryUrl}`,
+);
 
 let shuttingDown = false;
 const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[${agentName}] shutting down...`);
-  try { await registry.deregister(agentName); } catch { /* ignore */ }
-  try { await handle.shutdown(); } catch { /* ignore */ }
+  try {
+    await registry.deregister(agentName);
+  } catch { /* ignore */ }
+  try {
+    await handle.shutdown();
+  } catch { /* ignore */ }
   kv.close();
   Deno.exit(0);
 };

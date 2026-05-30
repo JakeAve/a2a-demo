@@ -22,10 +22,18 @@ Deno.test("parseEvent rejects an unknown type", () => {
   let threw = false;
   try {
     parseEvent({
-      sessionId: "s1", requestId: "r1", seq: 0, ts: 1, agent: "a",
-      depth: 0, type: "not.a.type", data: {},
+      sessionId: "s1",
+      requestId: "r1",
+      seq: 0,
+      ts: 1,
+      agent: "a",
+      depth: 0,
+      type: "not.a.type",
+      data: {},
     });
-  } catch { threw = true; }
+  } catch {
+    threw = true;
+  }
   assertEquals(threw, true);
 });
 
@@ -36,8 +44,14 @@ Deno.test("EVENT_TYPES lists every milestone type", () => {
 
 Deno.test("parseEvent accepts a room.post with roomId", () => {
   const ev = parseEvent({
-    sessionId: "s1", requestId: "room-1", seq: 0, ts: 1, agent: "Alvy",
-    depth: 0, roomId: "room-1", type: "room.post",
+    sessionId: "s1",
+    requestId: "room-1",
+    seq: 0,
+    ts: 1,
+    agent: "Alvy",
+    depth: 0,
+    roomId: "room-1",
+    type: "room.post",
     data: { from: "Alvy", to: ["Bex"], seq: 0, text: "hi" },
   });
   assertEquals(ev.type, "room.post");
@@ -46,8 +60,14 @@ Deno.test("parseEvent accepts a room.post with roomId", () => {
 
 Deno.test("parseEvent still accepts a non-room event without roomId", () => {
   const ev = parseEvent({
-    sessionId: "s1", requestId: "r1", seq: 0, ts: 1, agent: "x",
-    depth: 0, type: "turn.started", data: {},
+    sessionId: "s1",
+    requestId: "r1",
+    seq: 0,
+    ts: 1,
+    agent: "x",
+    depth: 0,
+    type: "turn.started",
+    data: {},
   });
   assertEquals(ev.roomId, undefined);
 });

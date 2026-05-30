@@ -7,7 +7,9 @@ import type { AgentCard } from "../../src/protocol/types.ts";
 
 function card(name: string): AgentCard {
   return {
-    name, description: "t", version: "1.0.0",
+    name,
+    description: "t",
+    version: "1.0.0",
     url: "http://localhost:0",
     skills: [{ id: "x", name: "x", description: "x" }],
     securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
@@ -30,7 +32,9 @@ Deno.test("e2e: agent A delegates to agent B and gets a result", async () => {
       const text = ctx.message.parts.find((p) => p.type === "text")?.text ?? "";
       return { text: `B-echo:${text}` };
     },
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   await regClient.register(b.card);
 
@@ -45,11 +49,17 @@ Deno.test("e2e: agent A delegates to agent B and gets a result", async () => {
         url: peer!.url,
         token,
         depth: ctx.depth + 1,
-        message: { messageId: "m2", role: "agent", parts: [{ type: "text", text: "hello-from-A" }] },
+        message: {
+          messageId: "m2",
+          role: "agent",
+          parts: [{ type: "text", text: "hello-from-A" }],
+        },
       });
       return { text: `A-wraps:${res.text}` };
     },
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
   await regClient.register(a.card);
 
@@ -57,7 +67,11 @@ Deno.test("e2e: agent A delegates to agent B and gets a result", async () => {
     url: a.card.url,
     token,
     depth: 0,
-    message: { messageId: "m1", role: "user", parts: [{ type: "text", text: "hi" }] },
+    message: {
+      messageId: "m1",
+      role: "user",
+      parts: [{ type: "text", text: "hi" }],
+    },
   });
 
   assertEquals(result.text, "A-wraps:B-echo:hello-from-A");
@@ -73,7 +87,9 @@ Deno.test("e2e: depth 2 rejection", async () => {
     card: card("bravo"),
     bearerToken: "tok",
     handler: async () => ({ text: "ok" }),
-    streamHandler: async function* () { yield { type: "done" }; },
+    streamHandler: async function* () {
+      yield { type: "done" };
+    },
   });
 
   let threw = false;
@@ -82,7 +98,11 @@ Deno.test("e2e: depth 2 rejection", async () => {
       url: b.card.url,
       token: "tok",
       depth: 2,
-      message: { messageId: "m", role: "user", parts: [{ type: "text", text: "x" }] },
+      message: {
+        messageId: "m",
+        role: "user",
+        parts: [{ type: "text", text: "x" }],
+      },
     });
   } catch (e) {
     threw = (e as Error).message.includes("max delegation depth");

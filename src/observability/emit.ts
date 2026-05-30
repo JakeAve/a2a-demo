@@ -7,10 +7,16 @@ import type { EmitEvent } from "./events.ts";
 export type Emitter = (event: EmitEvent) => Promise<void>;
 
 // Injectable transport so tests don't hit the network. Defaults to fetch.
-export type PostFn = (url: string, body: EmitEvent, token?: string) => Promise<void>;
+export type PostFn = (
+  url: string,
+  body: EmitEvent,
+  token?: string,
+) => Promise<void>;
 
 const defaultPost: PostFn = async (url, body, token) => {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
   if (token) headers["authorization"] = `Bearer ${token}`;
   await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
 };
