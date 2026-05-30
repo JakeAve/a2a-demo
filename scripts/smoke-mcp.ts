@@ -2,7 +2,7 @@
 //
 //   deno run -A --unstable-kv --env-file=.env scripts/smoke-mcp.ts
 //
-// Launches `deno run src/mcp.ts --agents=scout`, connects an MCP client over
+// Launches `deno run src/mcp.ts --agents=worker`, connects an MCP client over
 // stdio, lists tools, and calls list_agents. Prints PASS/FAIL.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -15,7 +15,7 @@ const transport = new StdioClientTransport({
     "--unstable-kv",
     "--env-file=.env",
     "src/mcp.ts",
-    "--agents=scout",
+    "--agents=worker",
   ],
 });
 

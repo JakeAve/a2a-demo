@@ -33,20 +33,20 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
   security: [{ bearer: [] }],
 });
 
-const scoutHandlers = makeOllamaHandlers({
+const workerHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.scout.systemPrompt,
+  systemPrompt: roles.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
-const scout = await startAgent({
-  card: baseCard("scout", roles.scout),
+const worker = await startAgent({
+  card: baseCard("worker", roles.worker),
   bearerToken: cfg.bearerToken,
-  handler: scoutHandlers.handler,
-  streamHandler: scoutHandlers.streamHandler,
+  handler: workerHandlers.handler,
+  streamHandler: workerHandlers.streamHandler,
 });
-await registryClient.register(scout.card);
-console.log(`[scout]  ${scout.card.url}`);
+await registryClient.register(worker.card);
+console.log(`[worker]  ${worker.card.url}`);
 
 const children = new Map<string, Deno.ChildProcess>();
 async function waitForRegistration(name: string, timeoutMs = 15_000): Promise<boolean> {
@@ -122,7 +122,7 @@ async function probe(label: string, target: string, text: string) {
   const start = Date.now();
   try {
     const res = await sendMessage({
-      url: target === "coordinator" ? coordinator.card.url : scout.card.url,
+      url: target === "coordinator" ? coordinator.card.url : worker.card.url,
       token: cfg.bearerToken,
       depth: 0,
       message: {
@@ -141,13 +141,13 @@ async function probe(label: string, target: string, text: string) {
 await probe(
   "test 1 (coordinator starts a delegation thread)",
   "coordinator",
-  "Use delegate_start to ask scout to write a 5-7-5 haiku about frogs. Just report the haiku back to me with no commentary.",
+  "Use delegate_start to ask worker to write a 5-7-5 haiku about frogs. Just report the haiku back to me with no commentary.",
 );
 
 await probe(
   "test 2 (coordinator should continue the SAME thread)",
   "coordinator",
-  "Now ask scout to make that haiku darker and more melancholic. Use delegate_continue so scout remembers the original.",
+  "Now ask worker to make that haiku darker and more melancholic. Use delegate_continue so worker remembers the original.",
 );
 
 await probe(
@@ -157,13 +157,13 @@ await probe(
 );
 
 await probe(
-  "test 4 (coordinator spawns a new agent named scout-helper)",
+  "test 4 (coordinator spawns a new agent named worker-helper)",
   "coordinator",
-  "Spawn a new scout agent named 'scout-helper' using the model 'gemma3:1b' (the local 1B variant — pass it via the model parameter to spawn_agent). After it registers, delegate_start a task asking it 'what color is the sky?'. Report what it said in one short sentence.",
+  "Spawn a new worker agent named 'worker-helper' using the model 'gemma3:1b' (the local 1B variant — pass it via the model parameter to spawn_agent). After it registers, delegate_start a task asking it 'what color is the sky?'. Report what it said in one short sentence.",
 );
 
 console.log("\n--- test 5 (depth guard via raw fetch with x-depth: 2) ---");
-const rejectRes = await fetch(`${scout.card.url}/message/send`, {
+const rejectRes = await fetch(`${worker.card.url}/message/send`, {
   method: "POST",
   headers: {
     "content-type": "application/json",
@@ -183,33 +183,6 @@ for (const t of finalThreads) {
   console.log(`  ${t.peer}/${t.threadId.slice(0, 8)}  turns=${t.turnCount}  title="${t.title}"`);
 }
 
-// Optional: exercise the claude-code backend if a credential is present.
-if (cfg.claudeCodeOauthToken || cfg.anthropicApiKey) {
-  const { makeClaudeCodeHandlers } = await import("../src/agent/claude-code.ts");
-  const { SessionStore } = await import("../src/store/sessions.ts");
-  const ccHandlers = makeClaudeCodeHandlers({
-    model: roles["coordinator-max"].model,
-    systemPrompt: roles["coordinator-max"].systemPrompt,
-    oauthToken: cfg.claudeCodeOauthToken,
-    apiKey: cfg.anthropicApiKey,
-    store, threads, sessions: new SessionStore(kv), registry: registryClient,
-    bearerToken: cfg.bearerToken, selfName: "coordinator-max",
-  });
-  const ccAgent = await startAgent({
-    card: baseCard("coordinator-max", roles["coordinator-max"]),
-    bearerToken: cfg.bearerToken,
-    handler: ccHandlers.handler, streamHandler: ccHandlers.streamHandler,
-  });
-  await registryClient.register(ccAgent.card);
-  const res = await sendMessage({
-    url: ccAgent.card.url, token: cfg.bearerToken, depth: 0,
-    message: { messageId: crypto.randomUUID(), role: "user",
-      parts: [{ type: "text", text: "Reply with one word: PONG" }], contextId: crypto.randomUUID() },
-  });
-  console.log(`[coordinator-max] -> ${res.text}`);
-  await ccAgent.shutdown();
-}
-
 // Kill spawned subprocesses
 for (const [name, child] of children) {
   try {
@@ -219,7 +192,7 @@ for (const [name, child] of children) {
   try { await child.status; } catch { /* ignore */ }
 }
 
-await scout.shutdown();
+await worker.shutdown();
 await coordinator.shutdown();
 await registry.shutdown();
 kv.close();

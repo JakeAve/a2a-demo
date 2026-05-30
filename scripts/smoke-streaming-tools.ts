@@ -30,23 +30,23 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
   security: [{ bearer: [] }],
 });
 
-const workerHandlers = makeOllamaHandlers({
+const helperHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.scout.systemPrompt,
+  systemPrompt: roles.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
-const worker = await startAgent({
-  card: baseCard("scout", roles.scout),
+const helper = await startAgent({
+  card: baseCard("helper", roles.worker),
   bearerToken: cfg.bearerToken,
-  handler: workerHandlers.handler,
-  streamHandler: workerHandlers.streamHandler,
+  handler: helperHandlers.handler,
+  streamHandler: helperHandlers.streamHandler,
 });
-await registryClient.register(worker.card);
+await registryClient.register(helper.card);
 
 const captainHandlers = makeOllamaHandlers({
   model: "gemma4:e4b",
-  systemPrompt: roles.analyst.systemPrompt,
+  systemPrompt: roles.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
   tools: {
@@ -54,11 +54,11 @@ const captainHandlers = makeOllamaHandlers({
     threads,
     registry: registryClient,
     bearerToken: cfg.bearerToken,
-    selfName: "analyst",
+    selfName: "captain",
   },
 });
 const captain = await startAgent({
-  card: baseCard("analyst", roles.analyst),
+  card: baseCard("captain", roles.worker),
   bearerToken: cfg.bearerToken,
   handler: captainHandlers.handler,
   streamHandler: captainHandlers.streamHandler,
@@ -66,13 +66,13 @@ const captain = await startAgent({
 await registryClient.register(captain.card);
 
 console.log(`[registry] localhost:${registry.port}`);
-console.log(`[scout]    ${worker.card.url}  (gemma3:1b)`);
-console.log(`[analyst]  ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`);
+console.log(`[helper]   ${helper.card.url}  (gemma3:1b)`);
+console.log(`[captain]  ${captain.card.url}  (gemma4:e4b, A2A tools, streaming)`);
 console.log();
 
 const start = Date.now();
 const contextId = crypto.randomUUID();
-const prompt = "Ask scout to pick one number between 1 and 10. After getting the answer back, say 'scout chose N' and that's all.";
+const prompt = "Ask helper to pick one number between 1 and 10. After getting the answer back, say 'helper chose N' and that's all.";
 console.log(`> ${prompt}\n`);
 console.log("(streaming events below)");
 
@@ -111,7 +111,7 @@ console.log(`total: ${Date.now() - start}ms`);
 console.log(`delta events: ${deltaCount}`);
 console.log(`tool events:  ${toolCount}`);
 
-await worker.shutdown();
+await helper.shutdown();
 await captain.shutdown();
 await registry.shutdown();
 kv.close();
