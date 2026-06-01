@@ -20,7 +20,10 @@ const kv = await Deno.openKv();
 const store = new ContextStore(kv);
 const threads = new ThreadStore(kv);
 
-const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
+const baseCard = (
+  name: string,
+  preset: typeof roles.agents[string],
+): AgentCard => ({
   name,
   description: preset.description,
   version: "1.0.0",
@@ -32,12 +35,12 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
 
 const helperHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.worker.systemPrompt,
+  systemPrompt: roles.agents.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
 const helper = await startAgent({
-  card: baseCard("helper", roles.worker),
+  card: baseCard("helper", roles.agents.worker),
   bearerToken: cfg.bearerToken,
   handler: helperHandlers.handler,
   streamHandler: helperHandlers.streamHandler,
@@ -46,7 +49,7 @@ await registryClient.register(helper.card);
 
 const captainHandlers = makeOllamaHandlers({
   model: "gemma4:e4b",
-  systemPrompt: roles.worker.systemPrompt,
+  systemPrompt: roles.agents.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
   tools: {
@@ -58,7 +61,7 @@ const captainHandlers = makeOllamaHandlers({
   },
 });
 const captain = await startAgent({
-  card: baseCard("captain", roles.worker),
+  card: baseCard("captain", roles.agents.worker),
   bearerToken: cfg.bearerToken,
   handler: captainHandlers.handler,
   streamHandler: captainHandlers.streamHandler,

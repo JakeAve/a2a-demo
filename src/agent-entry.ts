@@ -39,10 +39,10 @@ if (!role) {
   Deno.exit(2);
 }
 const roles = await loadRoles();
-const preset = roles[role];
+const preset = roles.agents[role];
 if (!preset) {
   console.error(
-    `unknown role "${role}". Known: ${Object.keys(roles).join(", ")}`,
+    `unknown role "${role}". Known: ${Object.keys(roles.agents).join(", ")}`,
   );
   Deno.exit(2);
 }

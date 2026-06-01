@@ -23,7 +23,10 @@ const threads = new ThreadStore(kv);
 
 console.log(`[registry] localhost:${registry.port}`);
 
-const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
+const baseCard = (
+  name: string,
+  preset: typeof roles.agents[string],
+): AgentCard => ({
   name,
   description: preset.description,
   version: "1.0.0",
@@ -36,12 +39,12 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
 // helper (gemma3:1b) — passive worker (no tools)
 const helperHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.worker.systemPrompt,
+  systemPrompt: roles.agents.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
 const helper = await startAgent({
-  card: baseCard("helper", roles.worker),
+  card: baseCard("helper", roles.agents.worker),
   bearerToken: cfg.bearerToken,
   handler: helperHandlers.handler,
   streamHandler: helperHandlers.streamHandler,
@@ -52,7 +55,7 @@ console.log(`[helper]  ${helper.card.url} (gemma3:1b, no tools)`);
 // captain (gemma4:e4b) — tool-capable
 const captainHandlers = makeOllamaHandlers({
   model: "gemma4:e4b",
-  systemPrompt: roles.worker.systemPrompt,
+  systemPrompt: roles.agents.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
   tools: {
@@ -65,7 +68,7 @@ const captainHandlers = makeOllamaHandlers({
   },
 });
 const captain = await startAgent({
-  card: baseCard("captain", roles.worker),
+  card: baseCard("captain", roles.agents.worker),
   bearerToken: cfg.bearerToken,
   handler: captainHandlers.handler,
   streamHandler: captainHandlers.streamHandler,

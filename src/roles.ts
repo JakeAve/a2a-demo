@@ -1,9 +1,9 @@
 // Role presets define what an agent IS (which backend, which model, which
 // personality, which skills it advertises). The roster lives in a single
 // JSON file: `agents.default.json` (committed). An optional gitignored
-// `agents.json` fully replaces it when present. Each top-level key is a role
-// name. `loadRoles()` reads the active file at startup, strips $schema, and
-// validates each preset into a strictly-typed map.
+// `agents.json` is merged on top when present. Each agent entry lives under
+// the top-level "agents" key. `loadRoles()` reads the active file(s) at
+// startup, strips $schema, merges, validates, and returns an AgentRoster.
 
 import type { Skill } from "./protocol/types.ts";
 
@@ -79,8 +79,105 @@ export function validateRolePreset(v: unknown, source: string): RolePreset {
   };
 }
 
+export type CrewDef = {
+  agents: string[];
+  agentOverrides?: Record<string, Partial<RolePreset>>;
+};
+
+export type AgentRoster = {
+  agents: Record<string, RolePreset>;
+  crews?: Record<string, CrewDef>;
+};
+
+// Resolved agent entry returned by getCrew — agent name plus merged config.
+export type ResolvedAgent = RolePreset & { name: string };
+
+export function mergeConfig(
+  base: AgentRoster,
+  override: Partial<AgentRoster>,
+): AgentRoster {
+  const merged: AgentRoster = {
+    agents: { ...base.agents },
+    crews: { ...base.crews },
+  };
+  if (override.agents !== undefined) {
+    // Per-agent shallow merge — preserves fields not mentioned in override
+    // e.g. override just "model" and keep inherited "role"
+    merged.agents = { ...base.agents };
+    for (const agentName in override.agents) {
+      merged.agents[agentName] = {
+        ...(base.agents?.[agentName] ?? {}),
+        ...override.agents[agentName],
+      } as RolePreset;
+    }
+  }
+  if (override.crews !== undefined) {
+    // crews are replaced per-entry, not wholesale
+    merged.crews = { ...(base.crews ?? {}), ...override.crews };
+  }
+  return merged;
+}
+
+export function validateCrews(config: AgentRoster): void {
+  if (!config.crews) return;
+  const errors: string[] = [];
+  const availableAgents = Object.keys(config.agents);
+  for (const [crewName, crewDef] of Object.entries(config.crews)) {
+    if (!crewDef.agents || crewDef.agents.length === 0) {
+      errors.push('Crew "' + crewName + '": must have at least one agent');
+      continue;
+    }
+    for (const agentName of crewDef.agents) {
+      if (!config.agents[agentName]) {
+        errors.push(
+          'Crew "' + crewName + '": unknown agent "' + agentName +
+            '". Available agents: ' + availableAgents.join(", "),
+        );
+      }
+    }
+    if (crewDef.agentOverrides) {
+      for (const agentName of Object.keys(crewDef.agentOverrides)) {
+        if (!config.agents[agentName]) {
+          errors.push(
+            'Crew "' + crewName +
+              '": agentOverrides references unknown agent "' + agentName +
+              '". Available agents: ' + availableAgents.join(", "),
+          );
+        } else if (!crewDef.agents.includes(agentName)) {
+          errors.push(
+            'Crew "' + crewName + '": agentOverrides references agent "' +
+              agentName + "\" not in this crew's agents list",
+          );
+        }
+      }
+    }
+  }
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
+  }
+}
+
+export function getCrew(config: AgentRoster, name: string): ResolvedAgent[] {
+  const crewNames = Object.keys(config.crews ?? {});
+  const crewDef = config.crews?.[name];
+  if (!crewDef) {
+    throw new Error(
+      'Unknown crew "' + name + '". Available crews: ' + crewNames.join(", "),
+    );
+  }
+  return crewDef.agents.map((agentName) => {
+    const base = config.agents[agentName];
+    const overrides = crewDef.agentOverrides?.[agentName] ?? {};
+    return { name: agentName, ...base, ...overrides };
+  });
+}
+
+export function listCrews(config: AgentRoster): string[] {
+  return Object.keys(config.crews ?? {});
+}
+
 export type LoadRolesOptions = {
-  /** Local override file; when it exists it fully replaces the default. */
+  /** Local override file; when it exists it is merged on top of the default. */
   overridePath?: string;
   /** Committed default roster file. */
   defaultPath?: string;
@@ -95,44 +192,68 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+function parseRosterFile(
+  obj: Record<string, unknown>,
+  path: string,
+): AgentRoster {
+  delete obj.$schema;
+  // New format: has explicit "agents" key
+  if (obj.agents !== undefined) {
+    if (typeof obj.agents !== "object" || Array.isArray(obj.agents)) {
+      throw new Error(path + ': "agents" must be an object');
+    }
+    const agentsObj = obj.agents as Record<string, unknown>;
+    const agents: Record<string, RolePreset> = {};
+    for (const [name, value] of Object.entries(agentsObj)) {
+      agents[name] = validateRolePreset(value, path + "#" + name);
+    }
+    const crews = obj.crews as Record<string, CrewDef> | undefined;
+    return { agents, crews };
+  }
+  // Backward compat: flat format — all remaining keys are role names
+  const agents: Record<string, RolePreset> = {};
+  for (const [name, value] of Object.entries(obj)) {
+    if (name === "crews") continue;
+    agents[name] = validateRolePreset(value, path + "#" + name);
+  }
+  const crews = obj.crews as Record<string, CrewDef> | undefined;
+  return { agents, crews };
+}
+
 export async function loadRoles(
   opts: LoadRolesOptions = {},
-): Promise<Record<string, RolePreset>> {
+): Promise<AgentRoster> {
   const overridePath = opts.overridePath ?? "agents.json";
   const defaultPath = opts.defaultPath ?? "agents.default.json";
 
-  // The override fully replaces the default when present — no merge.
-  const path = (await fileExists(overridePath)) ? overridePath : defaultPath;
+  const readAndParse = async (path: string): Promise<AgentRoster> => {
+    let text: string;
+    try {
+      text = await Deno.readTextFile(path);
+    } catch (e) {
+      throw new Error(
+        'could not read agents file "' + path + '": ' + (e as Error).message,
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (e) {
+      throw new Error(path + ": invalid JSON: " + (e as Error).message);
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error(
+        path + ": expected a JSON object mapping role name to preset",
+      );
+    }
+    return parseRosterFile(raw as Record<string, unknown>, path);
+  };
 
-  let text: string;
-  try {
-    text = await Deno.readTextFile(path);
-  } catch (e) {
-    throw new Error(
-      `could not read agents file "${path}": ${(e as Error).message}`,
-    );
-  }
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (e) {
-    throw new Error(`${path}: invalid JSON: ${(e as Error).message}`);
-  }
-
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error(
-      `${path}: expected a JSON object mapping role name to preset`,
-    );
-  }
-
-  const obj = raw as Record<string, unknown>;
-  // Strip $schema (used by editors for autocomplete), not a role.
-  delete obj.$schema;
-
-  const roles: Record<string, RolePreset> = {};
-  for (const [name, value] of Object.entries(obj)) {
-    roles[name] = validateRolePreset(value, `${path}#${name}`);
-  }
-  return roles;
+  const base = await readAndParse(defaultPath);
+  const hasOverride = await fileExists(overridePath);
+  const merged = hasOverride
+    ? mergeConfig(base, await readAndParse(overridePath))
+    : base;
+  validateCrews(merged);
+  return merged;
 }

@@ -81,14 +81,14 @@ Deno.test("loadRoles loads the default roster and strips $schema", async () => {
     },
     async (opts) => {
       const roles = await loadRoles(opts);
-      assert(roles.coordinator, "coordinator should load");
-      assertEquals(roles.coordinator.toolCapable, true);
-      assert(!("$schema" in roles), "$schema must not become a role");
+      assert(roles.agents.coordinator, "coordinator should load");
+      assertEquals(roles.agents.coordinator.toolCapable, true);
+      assert(!("$schema" in roles.agents), "$schema must not become a role");
     },
   );
 });
 
-Deno.test("agents.json fully replaces the default when present", async () => {
+Deno.test("agents.json adds new agents on top of the default", async () => {
   await withRoster(
     {
       "agents.default.json": { coordinator: GOOD, worker: GOOD },
@@ -96,15 +96,9 @@ Deno.test("agents.json fully replaces the default when present", async () => {
     },
     async (opts) => {
       const roles = await loadRoles(opts);
-      assert(roles.mybot, "override role should load");
-      assert(
-        !roles.coordinator,
-        "defaults must NOT leak through when override exists",
-      );
-      assert(
-        !roles.worker,
-        "defaults must NOT leak through when override exists",
-      );
+      assert(roles.agents.mybot, "override role should load");
+      assert(roles.agents.coordinator, "base agents survive merge");
+      assert(roles.agents.worker, "base agents survive merge");
     },
   );
 });
@@ -114,7 +108,7 @@ Deno.test("loadRoles falls back to the default when override is absent", async (
     { "agents.default.json": { coordinator: GOOD } },
     async (opts) => {
       const roles = await loadRoles(opts);
-      assert(roles.coordinator, "default loads when agents.json absent");
+      assert(roles.agents.coordinator, "default loads when agents.json absent");
     },
   );
 });
@@ -162,12 +156,12 @@ Deno.test("loadRoles errors clearly when no roster file exists", async () => {
 Deno.test("the committed agents.default.json is the light tool-using roster", async () => {
   // Pin to the default file so a local (gitignored) agents.json can't affect this.
   const roles = await loadRoles({ overridePath: "agents.default.json" });
-  assert(roles.coordinator, "coordinator present");
-  assert(roles.researcher, "researcher present");
-  assert(roles.worker, "worker present");
-  assertEquals(roles.coordinator.backend, "claude");
-  assertEquals(roles.researcher.webSearch, true);
-  assertEquals(roles.worker.backend, "ollama");
-  assertEquals(roles.coordinator.toolCapable, true);
-  assertEquals(roles.worker.toolCapable, true);
+  assert(roles.agents.coordinator, "coordinator present");
+  assert(roles.agents.researcher, "researcher present");
+  assert(roles.agents.worker, "worker present");
+  assertEquals(roles.agents.coordinator.backend, "claude");
+  assertEquals(roles.agents.researcher.webSearch, true);
+  assertEquals(roles.agents.worker.backend, "ollama");
+  assertEquals(roles.agents.coordinator.toolCapable, true);
+  assertEquals(roles.agents.worker.toolCapable, true);
 });

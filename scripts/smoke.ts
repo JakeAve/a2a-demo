@@ -23,7 +23,10 @@ const threads = new ThreadStore(kv);
 
 console.log(`[registry] localhost:${registry.port}`);
 
-const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
+const baseCard = (
+  name: string,
+  preset: typeof roles.agents[string],
+): AgentCard => ({
   name,
   description: preset.description,
   version: "1.0.0",
@@ -35,12 +38,12 @@ const baseCard = (name: string, preset: typeof roles[string]): AgentCard => ({
 
 const workerHandlers = makeOllamaHandlers({
   model: "gemma3:1b",
-  systemPrompt: roles.worker.systemPrompt,
+  systemPrompt: roles.agents.worker.systemPrompt,
   baseUrl: cfg.ollamaBaseUrl,
   store,
 });
 const worker = await startAgent({
-  card: baseCard("worker", roles.worker),
+  card: baseCard("worker", roles.agents.worker),
   bearerToken: cfg.bearerToken,
   handler: workerHandlers.handler,
   streamHandler: workerHandlers.streamHandler,
@@ -66,7 +69,7 @@ const spawnAgent = async (
   customName?: string,
   modelOverride?: string,
 ): Promise<SpawnResult> => {
-  const preset = roles[role];
+  const preset = roles.agents[role];
   if (!preset) return { ok: false, error: `unknown role ${role}` };
   const name = customName ?? role;
   if (children.has(name)) {
@@ -103,8 +106,8 @@ const spawnAgent = async (
 };
 
 const coordinatorHandlers = makeClaudeHandlers({
-  model: roles.coordinator.model,
-  systemPrompt: roles.coordinator.systemPrompt,
+  model: roles.agents.coordinator.model,
+  systemPrompt: roles.agents.coordinator.systemPrompt,
   apiKey: cfg.anthropicApiKey,
   store,
   threads,
@@ -113,7 +116,7 @@ const coordinatorHandlers = makeClaudeHandlers({
   selfName: "coordinator",
   spawnAgent,
   availableRoles: () =>
-    Object.entries(roles).map(([name, r]) => ({
+    Object.entries(roles.agents).map(([name, r]) => ({
       name,
       description: r.description,
       backend: r.backend,
@@ -121,7 +124,7 @@ const coordinatorHandlers = makeClaudeHandlers({
     })),
 });
 const coordinator = await startAgent({
-  card: baseCard("coordinator", roles.coordinator),
+  card: baseCard("coordinator", roles.agents.coordinator),
   bearerToken: cfg.bearerToken,
   handler: coordinatorHandlers.handler,
   streamHandler: coordinatorHandlers.streamHandler,

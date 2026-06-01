@@ -20,13 +20,54 @@ import {
   loadConfig,
   parseAgentsFlag,
 } from "./config.ts";
-import { loadRoles } from "./roles.ts";
+import type { AgentSpec } from "./config.ts";
+import { getCrew, listCrews, loadRoles } from "./roles.ts";
 import { setupOrchestrator } from "./orchestrator.ts";
 import { runMcpServer } from "./mcp-server.ts";
 
+function getCrewFlag(args: string[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith("--crew=")) return arg.slice("--crew=".length);
+    if (arg === "--crew" && i + 1 < args.length) return args[i + 1];
+  }
+  return Deno.env.get("AGENT_CREW");
+}
+
+function hasAgentsFlag(args: string[]): boolean {
+  return args.some((a) => a.startsWith("--agents=") || a === "--agents");
+}
+
 const cfg = await loadConfig();
 const roles = await loadRoles();
-const specs = parseAgentsFlag(getAgentsFlag(Deno.args), roles);
+
+let specs: AgentSpec[];
+const crewName = getCrewFlag(Deno.args);
+
+if (crewName !== undefined) {
+  let crew;
+  try {
+    crew = getCrew(roles, crewName);
+  } catch (e) {
+    console.error((e as Error).message);
+    console.error("Available crews: " + listCrews(roles).join(", "));
+    Deno.exit(1);
+  }
+  specs = crew!.map(({ name, ...preset }) => ({
+    name,
+    preset,
+    model: preset.model,
+  }));
+} else if (!hasAgentsFlag(Deno.args) && roles.crews?.default) {
+  const crew = getCrew(roles, "default");
+  specs = crew.map(({ name, ...preset }) => ({
+    name,
+    preset,
+    model: preset.model,
+  }));
+} else {
+  specs = parseAgentsFlag(getAgentsFlag(Deno.args), roles.agents);
+}
 
 try {
   assertBackendCredentials(specs, cfg);
@@ -35,7 +76,9 @@ try {
   Deno.exit(1);
 }
 
-const ctx = await setupOrchestrator(cfg, specs, roles, { childStdout: "null" });
+const ctx = await setupOrchestrator(cfg, specs, roles.agents, {
+  childStdout: "null",
+});
 
 let shuttingDown = false;
 const shutdown = async () => {
