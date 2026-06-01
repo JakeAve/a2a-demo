@@ -43,11 +43,11 @@ those run at `pre-push`. Bypass a hook with `--no-verify` when you need to.
 
 ## Agents
 
-The roster lives in **`agents.default.json`** (committed) — a JSON object
-mapping role name to preset. To customize locally, create **`agents.json`**
-(gitignored); when present it **fully replaces** the default roster. The shape
-of both files is described by `agents.schema.json` (referenced via `$schema` for
-editor autocomplete).
+The roster lives in **`agents.example.json`** (committed example) — a JSON
+object mapping role name to preset. To use your own roster, copy it to
+**`agents.json`** (gitignored); when present it **fully replaces** the example.
+The shape of both files is described by `agents.schema.json` (referenced via
+`$schema` for editor autocomplete).
 
 Agent names are identities, deliberately **decoupled from the model** that backs
 them — so a role can swap models without breaking how peers address it.
@@ -58,9 +58,9 @@ them — so a role can swap models without breaking how peers address it.
 | `researcher`  | Claude API (`claude-haiku-4-5`) | yes + web_search | Decomposes questions, delegates, synthesizes         |
 | `worker`      | Ollama (`gemma4:e4b`)           | yes              | Local worker: summarize, translate, review, reason   |
 
-**Add or change agents:** create `agents.json` (it fully replaces the default
-roster) with one entry per role matching the shape in `agents.schema.json`.
-Restart. No code changes needed.
+**Add or change agents:** copy `agents.example.json` to `agents.json` (it fully
+replaces the example roster) and edit to match the shape in
+`agents.schema.json`. Restart. No code changes needed.
 
 **Override a model at the CLI:** `--agents="coordinator,worker:gemma3:1b"` runs
 the `worker` role with the `gemma3:1b` tag.

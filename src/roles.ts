@@ -1,9 +1,9 @@
 // Role presets define what an agent IS (which backend, which model, which
 // personality, which skills it advertises). The roster lives in a single
-// JSON file: `agents.default.json` (committed). An optional gitignored
-// `agents.json` is merged on top when present. Each agent entry lives under
+// JSON file: `agents.example.json` (committed). An optional gitignored
+// `agents.json` fully replaces it when present. Each agent entry lives under
 // the top-level "agents" key. `loadRoles()` reads the active file(s) at
-// startup, strips $schema, merges, validates, and returns an AgentRoster.
+// startup, strips $schema, validates, and returns an AgentRoster.
 
 import type { Skill } from "./protocol/types.ts";
 
@@ -224,7 +224,7 @@ export async function loadRoles(
   opts: LoadRolesOptions = {},
 ): Promise<AgentRoster> {
   const overridePath = opts.overridePath ?? "agents.json";
-  const defaultPath = opts.defaultPath ?? "agents.default.json";
+  const defaultPath = opts.defaultPath ?? "agents.example.json";
 
   const readAndParse = async (path: string): Promise<AgentRoster> => {
     let text: string;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "A2A Agents Config",
-  "description": "Agent role presets and optional named crews. agents.default.json is committed; an optional gitignored agents.json fully replaces it when present.",
+  "description": "Agent role presets and optional named crews. agents.example.json is the committed example; copy it to agents.json (gitignored) to use your own roster.",
   "type": "object",
   "required": ["agents", "crews"],
   "additionalProperties": false,

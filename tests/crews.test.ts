@@ -23,7 +23,7 @@ async function withRoster(
   const dir = await Deno.makeTempDir();
   const opts = {
     overridePath: dir + "/agents.json",
-    defaultPath: dir + "/agents.default.json",
+    defaultPath: dir + "/agents.example.json",
   };
   for (const [name, value] of Object.entries(files)) {
     await Deno.writeTextFile(dir + "/" + name, JSON.stringify(value));
@@ -245,7 +245,7 @@ Deno.test("getCrew: stack with no agentOverrides returns base config", () => {
 Deno.test("loadRoles: agents from both files appear when override present", async () => {
   await withRoster(
     {
-      "agents.default.json": { agents: { agentA: GOOD } },
+      "agents.example.json": { agents: { agentA: GOOD } },
       "agents.json": { agents: { agentB: { ...GOOD, model: "llama3:8b" } } },
     },
     async (opts) => {
@@ -265,7 +265,7 @@ Deno.test("loadRoles: partial agent override in agents.json preserves other fiel
   };
   await withRoster(
     {
-      "agents.default.json": { agents: { agentA: GOOD } },
+      "agents.example.json": { agents: { agentA: GOOD } },
       "agents.json": {
         agents: { agentA: overridePreset },
       },
@@ -282,7 +282,7 @@ Deno.test("loadRoles: partial agent override in agents.json preserves other fiel
 Deno.test("loadRoles: crew in default survives when override has no stacks", async () => {
   await withRoster(
     {
-      "agents.default.json": {
+      "agents.example.json": {
         agents: { agentA: GOOD },
         crews: { myCrew: { agents: ["agentA"] } },
       },
@@ -295,11 +295,11 @@ Deno.test("loadRoles: crew in default survives when override has no stacks", asy
   );
 });
 
-// ─── committed agents.default.json ───────────────────────────────────────────
+// ─── committed agents.example.json ───────────────────────────────────────────
 
-Deno.test("the committed agents.default.json has expected crews", async () => {
+Deno.test("the committed agents.example.json has expected crews", async () => {
   // Point overridePath at the default file so no override is applied
-  const roster = await loadRoles({ overridePath: "agents.default.json" });
+  const roster = await loadRoles({ overridePath: "agents.example.json" });
   assertEquals(
     typeof roster.crews?.default,
     "object",

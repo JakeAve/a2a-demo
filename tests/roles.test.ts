@@ -59,7 +59,7 @@ async function withRoster(
   const dir = await Deno.makeTempDir();
   const opts = {
     overridePath: `${dir}/agents.json`,
-    defaultPath: `${dir}/agents.default.json`,
+    defaultPath: `${dir}/agents.example.json`,
   };
   for (const [name, value] of Object.entries(files)) {
     await Deno.writeTextFile(`${dir}/${name}`, JSON.stringify(value));
@@ -74,7 +74,7 @@ async function withRoster(
 Deno.test("loadRoles loads the default roster and strips $schema", async () => {
   await withRoster(
     {
-      "agents.default.json": {
+      "agents.example.json": {
         "$schema": "x",
         coordinator: { ...GOOD, toolCapable: true },
       },
@@ -91,7 +91,7 @@ Deno.test("loadRoles loads the default roster and strips $schema", async () => {
 Deno.test("agents.json adds new agents on top of the default", async () => {
   await withRoster(
     {
-      "agents.default.json": { coordinator: GOOD, worker: GOOD },
+      "agents.example.json": { coordinator: GOOD, worker: GOOD },
       "agents.json": { mybot: GOOD },
     },
     async (opts) => {
@@ -105,7 +105,7 @@ Deno.test("agents.json adds new agents on top of the default", async () => {
 
 Deno.test("loadRoles falls back to the default when override is absent", async () => {
   await withRoster(
-    { "agents.default.json": { coordinator: GOOD } },
+    { "agents.example.json": { coordinator: GOOD } },
     async (opts) => {
       const roles = await loadRoles(opts);
       assert(roles.agents.coordinator, "default loads when agents.json absent");
@@ -115,12 +115,12 @@ Deno.test("loadRoles falls back to the default when override is absent", async (
 
 Deno.test("loadRoles surfaces validation errors with file#key", async () => {
   await withRoster(
-    { "agents.default.json": { broken: { backend: "nope" } } },
+    { "agents.example.json": { broken: { backend: "nope" } } },
     async (opts) => {
       await assertRejects(
         () => loadRoles(opts),
         Error,
-        "agents.default.json#broken",
+        "agents.example.json#broken",
       );
     },
   );
@@ -128,7 +128,7 @@ Deno.test("loadRoles surfaces validation errors with file#key", async () => {
 
 Deno.test("loadRoles rejects a non-object roster file", async () => {
   await withRoster(
-    { "agents.default.json": [1, 2, 3] },
+    { "agents.example.json": [1, 2, 3] },
     async (opts) => {
       await assertRejects(
         () => loadRoles(opts),
@@ -145,7 +145,7 @@ Deno.test("loadRoles errors clearly when no roster file exists", async () => {
     () =>
       loadRoles({
         overridePath: `${dir}/agents.json`,
-        defaultPath: `${dir}/agents.default.json`,
+        defaultPath: `${dir}/agents.example.json`,
       }),
     Error,
     "could not read agents file",
@@ -153,9 +153,9 @@ Deno.test("loadRoles errors clearly when no roster file exists", async () => {
   await Deno.remove(dir, { recursive: true });
 });
 
-Deno.test("the committed agents.default.json is the light tool-using roster", async () => {
+Deno.test("the committed agents.example.json is the light tool-using roster", async () => {
   // Pin to the default file so a local (gitignored) agents.json can't affect this.
-  const roles = await loadRoles({ overridePath: "agents.default.json" });
+  const roles = await loadRoles({ overridePath: "agents.example.json" });
   assert(roles.agents.coordinator, "coordinator present");
   assert(roles.agents.researcher, "researcher present");
   assert(roles.agents.worker, "worker present");
