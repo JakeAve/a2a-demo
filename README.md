@@ -5,6 +5,64 @@ can delegate work to peers over HTTP, discovered via a local registry. Each
 agent runs its own HTTP server, speaks the A2A wire protocol (JSON-RPC-ish over
 HTTP + SSE), and authenticates with a shared bearer token.
 
+## Quick start (Ollama + Deno, no API key needed)
+
+The default crew in `agents.example.json` uses one Ollama model (`gemma4:e4b`)
+for the local `worker` and Claude Haiku for `coordinator`/`researcher`. If you
+only want local models, swap those roles to `backend: "ollama"` in a custom
+`agents.json`.
+
+**1. Pull the required model and start Ollama**
+
+```
+ollama pull gemma4:e4b
+ollama serve
+```
+
+**2. Clone, copy env, install**
+
+```
+git clone https://github.com/your-org/a2a
+cd a2a
+cp .env.example .env
+# If using any Claude-backed agents, add ANTHROPIC_API_KEY to .env
+```
+
+**3. Add to `~/.claude.json` (drive from Claude Code)**
+
+```json
+{
+  "mcpServers": {
+    "a2a": {
+      "type": "stdio",
+      "command": "deno",
+      "args": [
+        "run",
+        "--allow-all",
+        "--unstable-kv",
+        "--env-file=/abs/path/to/a2a/.env",
+        "/abs/path/to/a2a/src/mcp.ts",
+        "--crew=default"
+      ],
+      "cwd": "/abs/path/to/a2a"
+    }
+  }
+}
+```
+
+Replace `/abs/path/to/a2a` with this repo's absolute path. Restart Claude Code
+and the `a2a` tools (`list_agents`, `delegate_start`, `delegate_continue`, etc.)
+appear automatically.
+
+Or register it via the CLI instead:
+
+```
+claude mcp add a2a -- deno run --allow-all --unstable-kv \
+  --env-file=.env /abs/path/to/a2a/src/mcp.ts --crew=default
+```
+
+---
+
 ## Run
 
     cp .env.example .env
@@ -188,14 +246,8 @@ serves MCP on stdin/stdout. It is the sole orchestrator for its registry/KV
 while running — don't run `deno task start` against the same registry port
 (`REGISTRY_PORT`, default 7890) or default Deno KV at the same time.
 
-Register it with Claude Code:
-
-```
-claude mcp add a2a -- deno run -A --unstable-kv --env-file=.env \
-  /abs/path/to/a2a/src/mcp.ts --agents="coordinator,researcher,worker"
-```
-
-Replace `/abs/path/to/a2a` with this repo's absolute path.
+See the **Quick start** section above for the `~/.claude.json` entry and the
+`claude mcp add` equivalent.
 
 The client sees the raw A2A surface as MCP tools: `list_agents`,
 `list_my_threads`, `delegate_start`, `delegate_continue`, `reset_thread`, and
